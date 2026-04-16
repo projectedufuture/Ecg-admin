@@ -6,7 +6,9 @@ import { Lock, Mail, CheckCircle2, ArrowLeft, AlertCircle, RefreshCw } from "luc
 import InputField from "@/components/ui/InputField";
 import Btn from "@/components/ui/Btn";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://ecg-api-7ryx.onrender.com/api";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
