@@ -16,14 +16,14 @@ export default function MetricCard({ icon: Icon, label, value, sub, color, trend
     <div
       className="relative overflow-hidden rounded-2xl p-[22px_24px] transition-colors duration-200 group"
       style={{
-        background: "#151d2e",
-        border: "1px solid #1e293b",
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-clr)",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLDivElement).style.borderColor = color;
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.borderColor = "#1e293b";
+        (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-clr)";
       }}
     >
       <div
@@ -37,13 +37,13 @@ export default function MetricCard({ icon: Icon, label, value, sub, color, trend
         >
           <Icon size={18} style={{ color }} />
         </div>
-        <span className="text-[13px] font-medium" style={{ color: "#94A3B8" }}>
+        <span className="text-[13px] font-medium" style={{ color: "var(--text-secondary)" }}>
           {label}
         </span>
       </div>
       <div
         className="text-[30px] font-bold leading-none"
-        style={{ color: "#F1F5F9", letterSpacing: -1 }}
+        style={{ color: "var(--text-primary)", letterSpacing: -1 }}
       >
         {typeof value === "number" ? value.toLocaleString() : value}
       </div>
@@ -59,7 +59,7 @@ export default function MetricCard({ icon: Icon, label, value, sub, color, trend
             </span>
           )}
           {sub && (
-            <span className="text-xs" style={{ color: "#64748B" }}>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
               {sub}
             </span>
           )}

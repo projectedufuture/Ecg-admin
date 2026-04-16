@@ -17,10 +17,10 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { id: "users", label: "Users", icon: Users, href: "/users" },
-  { id: "sessions", label: "Sessions", icon: Activity, href: "/sessions" },
-  { id: "devices", label: "Devices", icon: Radio, href: "/devices" },
-  { id: "licenses", label: "Licenses", icon: ShieldCheck, href: "/licenses" },
+  { id: "users",     label: "Users",     icon: Users,           href: "/users" },
+  { id: "sessions",  label: "Sessions",  icon: Activity,        href: "/sessions" },
+  { id: "devices",   label: "Devices",   icon: Radio,           href: "/devices" },
+  { id: "licenses",  label: "Licenses",  icon: ShieldCheck,     href: "/licenses" },
 ];
 
 export default function Sidebar() {
@@ -39,8 +39,8 @@ export default function Sidebar() {
       style={{
         width: collapsed ? 68 : 220,
         minWidth: collapsed ? 68 : 220,
-        background: "#0d1321",
-        borderRight: "1px solid #1e293b",
+        background: "var(--bg-elevated)",
+        borderRight: "1px solid var(--border-clr)",
       }}
     >
       {/* Logo */}
@@ -48,27 +48,22 @@ export default function Sidebar() {
         className="flex items-center gap-[10px]"
         style={{
           padding: collapsed ? "20px 12px" : "20px 20px",
-          borderBottom: "1px solid #1e293b",
+          borderBottom: "1px solid var(--border-clr)",
           justifyContent: collapsed ? "center" : "flex-start",
         }}
       >
         <div
           className="flex items-center justify-center shrink-0"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 10,
-            background: "linear-gradient(135deg, #06B6D4, #8B5CF6)",
-          }}
+          style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg, #06B6D4, #8B5CF6)" }}
         >
           <Heart size={18} color="#fff" />
         </div>
         {!collapsed && (
           <div>
-            <div className="text-sm font-bold whitespace-nowrap" style={{ color: "#F1F5F9" }}>
+            <div className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--text-primary)" }}>
               ECG Admin
             </div>
-            <div className="text-[10px] whitespace-nowrap" style={{ color: "#64748B" }}>
+            <div className="text-[10px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
               Wellness Platform
             </div>
           </div>
@@ -87,18 +82,17 @@ export default function Sidebar() {
               style={{
                 padding: collapsed ? "11px 0" : "11px 14px",
                 background: active ? "rgba(6,182,212,0.08)" : "transparent",
-                color: active ? "#06B6D4" : "#94A3B8",
+                color: active ? "#06B6D4" : "var(--text-secondary)",
                 cursor: "pointer",
                 fontSize: 13,
                 fontWeight: active ? 600 : 500,
                 justifyContent: collapsed ? "center" : "flex-start",
               }}
               onMouseEnter={(e) => {
-                if (!active) (e.currentTarget as HTMLButtonElement).style.background = "#1a2236";
+                if (!active) (e.currentTarget as HTMLButtonElement).style.background = "var(--hover-bg)";
               }}
               onMouseLeave={(e) => {
-                if (!active)
-                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
               }}
             >
               {active && (
@@ -122,25 +116,18 @@ export default function Sidebar() {
       </div>
 
       {/* Collapse Button */}
-      <div style={{ padding: "12px 8px", borderTop: "1px solid #1e293b" }}>
+      <div style={{ padding: "12px 8px", borderTop: "1px solid var(--border-clr)" }}>
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="flex items-center justify-center gap-2 rounded-[10px] border-none w-full text-xs font-sans"
           style={{
             padding: "10px 0",
-            background: "#111827",
-            color: "#64748B",
+            background: "var(--bg-input)",
+            color: "var(--text-muted)",
             cursor: "pointer",
           }}
         >
-          {collapsed ? (
-            <ChevronRight size={16} />
-          ) : (
-            <>
-              <ChevronLeft size={16} />
-              <span>Collapse</span>
-            </>
-          )}
+          {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>Collapse</span></>}
         </button>
       </div>
     </div>

@@ -2,16 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Lock, Mail, CheckCircle2, ArrowLeft, AlertCircle, RefreshCw } from "lucide-react";
 import InputField from "@/components/ui/InputField";
 import Btn from "@/components/ui/Btn";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const goBack = () => router.push("/login");
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!email) {
+      setError("Please enter your email address.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setError(data.error || "Something went wrong. Please try again.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError("Network error. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -62,8 +92,9 @@ export default function ForgotPasswordPage() {
                 Check your email
               </h3>
               <p className="text-[13px] leading-relaxed" style={{ color: "#94A3B8" }}>
-                A password reset link has been sent to{" "}
-                <strong style={{ color: "#F1F5F9" }}>{email}</strong>.
+                If <strong style={{ color: "#F1F5F9" }}>{email}</strong> is registered, a
+                password reset link has been sent. The link expires in{" "}
+                <strong style={{ color: "#F1F5F9" }}>15 minutes</strong>.
               </p>
               <div className="mt-4">
                 <Btn onClick={goBack} variant="ghost" style={{ width: "100%", justifyContent: "center" }}>
@@ -74,6 +105,19 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <>
+              {error && (
+                <div
+                  className="flex items-center gap-2 rounded-[10px] px-[14px] py-[10px] mb-4 text-[13px]"
+                  style={{
+                    background: "rgba(239,68,68,0.12)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    color: "#EF4444",
+                  }}
+                >
+                  <AlertCircle size={14} />
+                  {error}
+                </div>
+              )}
               <InputField
                 label="Email Address"
                 icon={Mail}
@@ -83,12 +127,18 @@ export default function ForgotPasswordPage() {
                 placeholder="Enter your admin email"
               />
               <Btn
-                onClick={() => {
-                  if (email) setSent(true);
-                }}
+                onClick={handleSubmit}
+                disabled={loading}
                 style={{ width: "100%", justifyContent: "center", padding: "12px 0", marginBottom: 12 }}
               >
-                Send Reset Link
+                {loading ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin-slow" />
+                    Sending…
+                  </>
+                ) : (
+                  "Send Reset Link"
+                )}
               </Btn>
               <Btn onClick={goBack} variant="ghost" style={{ width: "100%", justifyContent: "center" }}>
                 <ArrowLeft size={14} />

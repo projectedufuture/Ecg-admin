@@ -19,7 +19,7 @@ export default function UsersPage() {
     { key: "registeredDate", label: "Registered" },
     { key: "lastActive", label: "Last Active" },
     { key: "sessions", label: "Sessions" },
-    { key: "deviceId", label: "Device", render: (v: unknown) => v ? String(v) : <span style={{ color: "#64748B" }}>—</span> },
+    { key: "deviceId", label: "Device", render: (v: unknown) => v ? String(v) : <span style={{ color: "var(--text-muted)" }}>—</span> },
     { key: "status", label: "Status", render: (v: unknown) => <StatusBadge status={v as string} /> },
   ];
 
@@ -27,7 +27,7 @@ export default function UsersPage() {
     return (
       <div className="text-center py-20">
         <AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} />
-        <p className="text-sm mb-4" style={{ color: "#94A3B8" }}>Failed to load users</p>
+        <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>Failed to load users</p>
         <Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn>
       </div>
     );
@@ -39,8 +39,8 @@ export default function UsersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold m-0" style={{ color: "#F1F5F9" }}>Users</h1>
-          <p className="text-[13px] mt-1" style={{ color: "#64748B" }}>Manage end-consumer accounts</p>
+          <h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Users</h1>
+          <p className="text-[13px] mt-1" style={{ color: "var(--text-muted)" }}>Manage end-consumer accounts</p>
         </div>
         <Btn variant="ghost" onClick={() => downloadExport("users")}><Download size={14} />Export CSV</Btn>
       </div>

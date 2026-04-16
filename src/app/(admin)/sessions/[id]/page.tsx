@@ -34,7 +34,6 @@ export default function SessionDetailPage() {
 
   const session = data as Record<string, unknown> | undefined;
 
-  // Build ECG data from readings or from ecgValues array
   const ecgData = useMemo(() => {
     if (!session) return [];
     const readings = session.readings as { ecgValue: number }[] | undefined;
@@ -48,9 +47,7 @@ export default function SessionDetailPage() {
     if (!session) return [];
     const readings = session.readings as { ecgValue: number; temperatureCelsius: number }[] | undefined;
     if (readings && readings.length > 0) {
-      // Sample ~40 HR points from ecg data variance
-      const step = Math.max(1, Math.floor(readings.length / 40));
-      return Array.from({ length: 40 }, (_, i) => {
+      return Array.from({ length: 40 }, () => {
         const minHR = (session.minHR as number) || 60;
         const maxHR = (session.maxHR as number) || 100;
         return minHR + Math.random() * (maxHR - minHR);
@@ -77,14 +74,14 @@ export default function SessionDetailPage() {
   }, [session]);
 
   if (isLoading) {
-    return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-[180px] rounded-2xl animate-pulse" style={{ background: "#151d2e" }} />)}</div>;
+    return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-[180px] rounded-2xl animate-pulse" style={{ background: "var(--bg-surface)" }} />)}</div>;
   }
 
   if (error || !session) {
     return (
       <div className="text-center py-20">
         <AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} />
-        <p className="text-sm mb-4" style={{ color: "#94A3B8" }}>Failed to load session</p>
+        <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>Failed to load session</p>
         <Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn>
       </div>
     );
@@ -111,51 +108,51 @@ export default function SessionDetailPage() {
       <Breadcrumbs items={[{ label: "Sessions", onClick: () => router.push("/sessions") }, { label: session.id as string }]} />
       <div className="grid grid-cols-5 gap-3 mb-5">
         {metrics.map((m, i) => (
-          <div key={i} className="rounded-xl" style={{ background: "#151d2e", border: "1px solid #1e293b", padding: "16px 18px" }}>
-            <div className="flex items-center gap-[6px] mb-2"><m.i size={14} style={{ color: m.c }} /><span className="text-[11px] uppercase" style={{ color: "#64748B", letterSpacing: 0.5 }}>{m.l}</span></div>
-            <div className="text-lg font-bold capitalize" style={{ color: "#F1F5F9" }}>{m.v}</div>
+          <div key={i} className="rounded-xl" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)", padding: "16px 18px" }}>
+            <div className="flex items-center gap-[6px] mb-2"><m.i size={14} style={{ color: m.c }} /><span className="text-[11px] uppercase" style={{ color: "var(--text-muted)", letterSpacing: 0.5 }}>{m.l}</span></div>
+            <div className="text-lg font-bold capitalize" style={{ color: "var(--text-primary)" }}>{m.v}</div>
           </div>
         ))}
       </div>
-      <div className="rounded-2xl p-6 mb-5" style={{ background: "#151d2e", border: "1px solid #1e293b" }}>
+      <div className="rounded-2xl p-6 mb-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold m-0" style={{ color: "#F1F5F9" }}>ECG Waveform</h3>
+          <h3 className="text-base font-semibold m-0" style={{ color: "var(--text-primary)" }}>ECG Waveform</h3>
           <div className="flex gap-2">
             <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.max(0.25, z - 0.5))} disabled={zoomLevel <= 0.25}><Minus size={12} />Zoom Out</Btn>
-            <span className="flex items-center px-2 text-xs font-semibold" style={{ color: "#94A3B8" }}>{zoomLevel.toFixed(1)}x</span>
+            <span className="flex items-center px-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{zoomLevel.toFixed(1)}x</span>
             <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
           </div>
         </div>
         <ECGWaveform data={ecgData} height={180} zoom={zoomLevel} />
-        <div className="flex justify-between mt-[10px] text-[11px]" style={{ color: "#64748B" }}>
+        <div className="flex justify-between mt-[10px] text-[11px]" style={{ color: "var(--text-muted)" }}>
           <span>{formatTime(session.startTime as string)}</span>
           <span className="font-semibold" style={{ color: "#06B6D4" }}>Wellness monitoring only — Not for clinical diagnosis</span>
           <span>{formatTime(session.endTime as string)}</span>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-2xl p-6" style={{ background: "#151d2e", border: "1px solid #1e293b" }}>
-          <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "#F1F5F9" }}><Heart size={16} color="#F43F5E" />Heart Rate Trend</h3>
+        <div className="rounded-2xl p-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
+          <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}><Heart size={16} color="#F43F5E" />Heart Rate Trend</h3>
           <div className="flex items-center justify-center py-3"><MiniChart data={hrData} color="#F43F5E" height={80} width={300} /></div>
           <div className="flex justify-around mt-[14px]">
             {[{ l: "Min", v: `${session.minHR} bpm`, c: "#10B981" }, { l: "Avg", v: `${session.avgHR} bpm`, c: "#F43F5E" }, { l: "Max", v: `${session.maxHR} bpm`, c: "#EF4444" }].map((s, i) => (
-              <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "#64748B" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
+              <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
             ))}
           </div>
-          <div className="mt-[14px] rounded-[10px] text-xs flex items-start gap-2" style={{ padding: "10px 14px", background: "rgba(244,63,94,0.12)", color: "#94A3B8" }}>
+          <div className="mt-[14px] rounded-[10px] text-xs flex items-start gap-2" style={{ padding: "10px 14px", background: "rgba(244,63,94,0.12)", color: "var(--text-secondary)" }}>
             <Info size={14} color="#F43F5E" className="shrink-0 mt-[1px]" /><span>Heart rate from MAX30102 PPG sensor (PCB-F, left chest). Firmware peak detection with motion artifact filtering via SQI thresholding.</span>
           </div>
         </div>
-        <div className="rounded-2xl p-6" style={{ background: "#151d2e", border: "1px solid #1e293b" }}>
-          <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "#F1F5F9" }}><Thermometer size={16} color="#F59E0B" />Temperature Trend</h3>
+        <div className="rounded-2xl p-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
+          <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}><Thermometer size={16} color="#F59E0B" />Temperature Trend</h3>
           <div className="flex items-center justify-center py-3"><MiniChart data={tempData} color="#F59E0B" height={80} width={300} /></div>
           <div className="flex justify-around mt-[14px]">
             {[{ l: "Min", v: "36.1°C" }, { l: "Avg", v: `${session.avgTemp}°C` }, { l: "Max", v: "37.4°C" }].map((s, i) => (
-              <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "#64748B" }}>{s.l}</div><div className="text-base font-bold" style={{ color: "#F1F5F9" }}>{s.v}</div></div>
+              <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{s.v}</div></div>
             ))}
           </div>
-          <div className="mt-5"><h4 className="text-[13px] font-semibold mb-[10px]" style={{ color: "#94A3B8" }}>Session Info</h4>
-            {sessionInfo.map(([k, v], i) => (<div key={i} className="flex justify-between py-[6px] text-xs" style={{ borderBottom: "1px solid #1e293b" }}><span style={{ color: "#64748B" }}>{k}</span><span className="font-medium" style={{ color: "#F1F5F9" }}>{v}</span></div>))}
+          <div className="mt-5"><h4 className="text-[13px] font-semibold mb-[10px]" style={{ color: "var(--text-secondary)" }}>Session Info</h4>
+            {sessionInfo.map(([k, v], i) => (<div key={i} className="flex justify-between py-[6px] text-xs" style={{ borderBottom: "1px solid var(--border-clr)" }}><span style={{ color: "var(--text-muted)" }}>{k}</span><span className="font-medium" style={{ color: "var(--text-primary)" }}>{v}</span></div>))}
           </div>
           <div className="mt-4 text-center"><Btn variant="accentSoft" onClick={() => downloadExport("sessions")}><Download size={14} />Export Session CSV</Btn></div>
         </div>

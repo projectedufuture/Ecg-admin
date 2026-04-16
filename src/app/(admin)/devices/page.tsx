@@ -30,7 +30,7 @@ export default function DevicesPage() {
     { key: "firmware", label: "Firmware" },
     { key: "hardwareVersion", label: "HW Version" },
     { key: "lastSeen", label: "Last Seen", render: (v: unknown) => formatRelativeTime(v as string) },
-    { key: "batteryLevel", label: "Battery", render: (v: unknown) => { const val = v as number; return (<div className="flex items-center gap-[6px]"><div className="overflow-hidden rounded-[3px]" style={{ width: 40, height: 6, background: "#111827" }}><div className="h-full rounded-[3px]" style={{ width: `${val}%`, background: val > 50 ? "#10B981" : val > 20 ? "#F59E0B" : "#EF4444" }} /></div><span className="text-[11px]">{val}%</span></div>); } },
+    { key: "batteryLevel", label: "Battery", render: (v: unknown) => { const val = v as number; return (<div className="flex items-center gap-[6px]"><div className="overflow-hidden rounded-[3px]" style={{ width: 40, height: 6, background: "var(--bg-input)" }}><div className="h-full rounded-[3px]" style={{ width: `${val}%`, background: val > 50 ? "#10B981" : val > 20 ? "#F59E0B" : "#EF4444" }} /></div><span className="text-[11px]">{val}%</span></div>); } },
     { key: "licenseStatus", label: "License", render: (v: unknown) => <StatusBadge status={v as string} /> },
   ];
 
@@ -50,7 +50,7 @@ export default function DevicesPage() {
   };
 
   if (error) {
-    return (<div className="text-center py-20"><AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} /><p className="text-sm mb-4" style={{ color: "#94A3B8" }}>Failed to load devices</p><Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn></div>);
+    return (<div className="text-center py-20"><AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} /><p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>Failed to load devices</p><Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn></div>);
   }
 
   const devices = (data?.items as unknown as Device[]) ?? [];
@@ -59,7 +59,7 @@ export default function DevicesPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div><h1 className="text-2xl font-bold m-0" style={{ color: "#F1F5F9" }}>Devices</h1><p className="text-[13px] mt-1" style={{ color: "#64748B" }}>Registered wearable device inventory</p></div>
+        <div><h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Devices</h1><p className="text-[13px] mt-1" style={{ color: "var(--text-muted)" }}>Registered wearable device inventory</p></div>
         <div className="flex gap-2"><Btn onClick={() => setShowRegister(true)}><Plus size={14} />Register Device</Btn><Btn variant="ghost" onClick={() => downloadExport("devices")}><Download size={14} />Export CSV</Btn></div>
       </div>
       <div className="grid grid-cols-4 gap-3 mb-5">
@@ -71,14 +71,14 @@ export default function DevicesPage() {
       <DataTable columns={columns} data={devices as unknown as Record<string, unknown>[]} loading={isLoading} onRowClick={(row: Record<string, unknown>) => router.push(`/devices/${(row as unknown as Device).id}`)} />
       <Modal open={showRegister} title="Register New Device" onClose={() => { setShowRegister(false); setRegSuccess(false); setRegError(""); }}>
         {regSuccess ? (
-          <div className="text-center py-5"><div className="inline-flex items-center justify-center mb-4" style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(16,185,129,0.12)" }}><CheckCircle2 size={24} color="#10B981" /></div><h3 className="text-[17px] font-bold mb-2" style={{ color: "#F1F5F9" }}>Device Registered</h3><p className="text-[13px]" style={{ color: "#94A3B8" }}><strong style={{ color: "#F1F5F9" }}>{regDeviceId}</strong> has been added to the system.</p></div>
+          <div className="text-center py-5"><div className="inline-flex items-center justify-center mb-4" style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(16,185,129,0.12)" }}><CheckCircle2 size={24} color="#10B981" /></div><h3 className="text-[17px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>Device Registered</h3><p className="text-[13px]" style={{ color: "var(--text-secondary)" }}><strong style={{ color: "var(--text-primary)" }}>{regDeviceId}</strong> has been added to the system.</p></div>
         ) : (
           <>
             {regError && <div className="flex items-center gap-2 rounded-[10px] px-[14px] py-[10px] mb-4 text-[13px]" style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", color: "#EF4444" }}><AlertCircle size={14} />{regError}</div>}
-            <div className="rounded-[10px] mb-5 text-[13px] flex items-start gap-2" style={{ padding: "12px 14px", background: "rgba(6,182,212,0.15)", color: "#94A3B8" }}><Info size={14} color="#06B6D4" className="shrink-0 mt-[1px]" /><span>Register devices supplied by the manufacturer. Device ID must be in format ECG-XXXXX (5 digits).</span></div>
+            <div className="rounded-[10px] mb-5 text-[13px] flex items-start gap-2" style={{ padding: "12px 14px", background: "rgba(6,182,212,0.15)", color: "var(--text-secondary)" }}><Info size={14} color="#06B6D4" className="shrink-0 mt-[1px]" /><span>Register devices supplied by the manufacturer. Device ID must be in format ECG-XXXXX (5 digits).</span></div>
             <InputField label="Device ID" icon={Hash} value={regDeviceId} onChange={setRegDeviceId} placeholder="e.g. ECG-02032" />
             <InputField label="Hardware Version" icon={Cpu} value={regHwVersion} onChange={setRegHwVersion} placeholder="e.g. HW-2.0" />
-            <div className="mb-4"><label className="block text-xs font-semibold mb-[6px] uppercase" style={{ color: "#94A3B8", letterSpacing: 0.5 }}>Client</label><div className="flex items-center gap-2 rounded-[10px]" style={{ background: "#111827", border: "1px solid #1e293b", padding: "10px 14px" }}><Package size={16} style={{ color: "#64748B" }} /><span className="text-sm" style={{ color: "#94A3B8" }}>CLIENT-001</span></div></div>
+            <div className="mb-4"><label className="block text-xs font-semibold mb-[6px] uppercase" style={{ color: "var(--text-secondary)", letterSpacing: 0.5 }}>Client</label><div className="flex items-center gap-2 rounded-[10px]" style={{ background: "var(--bg-input)", border: "1px solid var(--border-clr)", padding: "10px 14px" }}><Package size={16} style={{ color: "var(--text-muted)" }} /><span className="text-sm" style={{ color: "var(--text-secondary)" }}>CLIENT-001</span></div></div>
             <div className="flex gap-[10px] justify-end mt-2"><Btn onClick={() => setShowRegister(false)} variant="ghost">Cancel</Btn><Btn onClick={handleRegister} disabled={!regDeviceId || regLoading}>{regLoading ? <><RefreshCw size={14} className="animate-spin-slow" />Registering...</> : <><Plus size={14} />Register</>}</Btn></div>
           </>
         )}

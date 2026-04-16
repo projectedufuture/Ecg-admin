@@ -14,7 +14,7 @@ interface BreadcrumbsProps {
 
 export default function Breadcrumbs({ items }: BreadcrumbsProps) {
   return (
-    <div className="flex items-center gap-[6px] text-[13px] mb-5" style={{ color: "#64748B" }}>
+    <div className="flex items-center gap-[6px] text-[13px] mb-5" style={{ color: "var(--text-muted)" }}>
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-[6px]">
           {i > 0 && <ChevronRight size={14} style={{ opacity: 0.4 }} />}
@@ -22,7 +22,7 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
             onClick={item.onClick}
             className="transition-colors duration-150"
             style={{
-              color: i === items.length - 1 ? "#F1F5F9" : "#64748B",
+              color: i === items.length - 1 ? "var(--text-primary)" : "var(--text-muted)",
               fontWeight: i === items.length - 1 ? 600 : 400,
               cursor: item.onClick ? "pointer" : "default",
             }}
@@ -32,7 +32,7 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
             onMouseLeave={(e) => {
               if (item.onClick)
                 (e.target as HTMLSpanElement).style.color =
-                  i === items.length - 1 ? "#F1F5F9" : "#64748B";
+                  i === items.length - 1 ? "var(--text-primary)" : "var(--text-muted)";
             }}
           >
             {item.label}

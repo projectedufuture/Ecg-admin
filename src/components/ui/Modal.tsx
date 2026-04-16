@@ -24,8 +24,8 @@ export default function Modal({ open, title, children, onClose, wide }: ModalPro
         onClick={(e) => e.stopPropagation()}
         className="overflow-y-auto"
         style={{
-          background: "#151d2e",
-          border: "1px solid #1e293b",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-clr)",
           borderRadius: 16,
           padding: 28,
           width: wide ? 560 : 460,
@@ -36,7 +36,7 @@ export default function Modal({ open, title, children, onClose, wide }: ModalPro
         <div className="flex items-center justify-between mb-5">
           <h3
             className="text-[17px] font-bold m-0"
-            style={{ color: "#F1F5F9" }}
+            style={{ color: "var(--text-primary)" }}
           >
             {title}
           </h3>
@@ -44,7 +44,7 @@ export default function Modal({ open, title, children, onClose, wide }: ModalPro
             onClick={onClose}
             className="bg-transparent border-none cursor-pointer p-1"
           >
-            <X size={18} style={{ color: "#64748B" }} />
+            <X size={18} style={{ color: "var(--text-muted)" }} />
           </button>
         </div>
         {children}

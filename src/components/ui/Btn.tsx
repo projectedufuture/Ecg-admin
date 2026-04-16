@@ -14,10 +14,10 @@ interface BtnProps {
 }
 
 const variantStyles: Record<BtnVariant, React.CSSProperties> = {
-  primary: { background: "#06B6D4", color: "#fff", border: "none" },
-  danger: { background: "#EF4444", color: "#fff", border: "none" },
-  ghost: { background: "#111827", color: "#F1F5F9", border: "1px solid #1e293b" },
-  success: { background: "#10B981", color: "#fff", border: "none" },
+  primary:    { background: "#06B6D4", color: "#fff", border: "none" },
+  danger:     { background: "#EF4444", color: "#fff", border: "none" },
+  ghost:      { background: "var(--bg-input)", color: "var(--text-primary)", border: "1px solid var(--border-clr)" },
+  success:    { background: "#10B981", color: "#fff", border: "none" },
   accentSoft: { background: "rgba(6,182,212,0.15)", color: "#06B6D4", border: "1px solid rgba(6,182,212,0.25)" },
 };
 

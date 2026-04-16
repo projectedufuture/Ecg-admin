@@ -30,7 +30,7 @@ export default function InputField({
       {label && (
         <label
           className="block text-xs font-semibold mb-[6px] uppercase"
-          style={{ color: "#94A3B8", letterSpacing: 0.5 }}
+          style={{ color: "var(--text-secondary)", letterSpacing: 0.5 }}
         >
           {label}
         </label>
@@ -38,12 +38,12 @@ export default function InputField({
       <div
         className="flex items-center gap-2 rounded-[10px] px-[14px] py-[10px]"
         style={{
-          background: "#111827",
-          border: "1px solid #1e293b",
+          background: "var(--bg-input)",
+          border: "1px solid var(--border-clr)",
           opacity: disabled ? 0.5 : 1,
         }}
       >
-        {Icon && <Icon size={16} style={{ color: "#64748B" }} />}
+        {Icon && <Icon size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />}
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -51,7 +51,7 @@ export default function InputField({
           placeholder={placeholder}
           disabled={disabled}
           className="bg-transparent border-none outline-none flex-1 text-sm font-sans"
-          style={{ color: "#F1F5F9" }}
+          style={{ color: "var(--text-primary)" }}
         />
         {isPass && (
           <button
@@ -60,9 +60,9 @@ export default function InputField({
             className="bg-transparent border-none cursor-pointer p-0"
           >
             {show ? (
-              <EyeOff size={16} style={{ color: "#64748B" }} />
+              <EyeOff size={16} style={{ color: "var(--text-muted)" }} />
             ) : (
-              <Eye size={16} style={{ color: "#64748B" }} />
+              <Eye size={16} style={{ color: "var(--text-muted)" }} />
             )}
           </button>
         )}

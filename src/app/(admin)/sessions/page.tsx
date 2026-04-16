@@ -27,7 +27,7 @@ export default function SessionsPage() {
     return (
       <div className="text-center py-20">
         <AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} />
-        <p className="text-sm mb-4" style={{ color: "#94A3B8" }}>Failed to load sessions</p>
+        <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>Failed to load sessions</p>
         <Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn>
       </div>
     );
@@ -39,8 +39,8 @@ export default function SessionsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold m-0" style={{ color: "#F1F5F9" }}>Sessions</h1>
-          <p className="text-[13px] mt-1" style={{ color: "#64748B" }}>ECG, heart rate, and temperature recordings</p>
+          <h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Sessions</h1>
+          <p className="text-[13px] mt-1" style={{ color: "var(--text-muted)" }}>ECG, heart rate, and temperature recordings</p>
         </div>
         <Btn variant="ghost" onClick={() => downloadExport("sessions")}><Download size={14} />Export CSV</Btn>
       </div>

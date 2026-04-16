@@ -90,7 +90,7 @@ export default function DataTable<T extends Record<string, unknown>>({
           <div
             key={i}
             className="h-12 rounded-lg animate-pulse"
-            style={{ background: "#151d2e" }}
+            style={{ background: "var(--bg-surface)" }}
           />
         ))}
       </div>
@@ -102,15 +102,15 @@ export default function DataTable<T extends Record<string, unknown>>({
       <div className="flex items-center gap-[10px] mb-4">
         <div
           className="flex-1 flex items-center gap-2 rounded-[10px] px-[14px] py-2"
-          style={{ background: "#111827", border: "1px solid #1e293b" }}
+          style={{ background: "var(--bg-input)", border: "1px solid var(--border-clr)" }}
         >
-          <Search size={16} style={{ color: "#64748B" }} />
+          <Search size={16} style={{ color: "var(--text-muted)" }} />
           <input
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search..."
             className="bg-transparent border-none outline-none flex-1 text-[13px] font-sans"
-            style={{ color: "#F1F5F9" }}
+            style={{ color: "var(--text-primary)" }}
           />
           {search && (
             <button
@@ -120,18 +120,18 @@ export default function DataTable<T extends Record<string, unknown>>({
               }}
               className="bg-transparent border-none cursor-pointer p-0"
             >
-              <X size={14} style={{ color: "#64748B" }} />
+              <X size={14} style={{ color: "var(--text-muted)" }} />
             </button>
           )}
         </div>
-        <span className="text-xs whitespace-nowrap" style={{ color: "#64748B" }}>
+        <span className="text-xs whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
           {sorted.length} records
         </span>
       </div>
 
       <div
         className="overflow-x-auto rounded-xl"
-        style={{ border: "1px solid #1e293b" }}
+        style={{ border: "1px solid var(--border-clr)" }}
       >
         <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
@@ -144,9 +144,9 @@ export default function DataTable<T extends Record<string, unknown>>({
                   style={{
                     padding: "12px 16px",
                     fontWeight: 600,
-                    color: "#94A3B8",
-                    background: "#111827",
-                    borderBottom: "1px solid #1e293b",
+                    color: "var(--text-secondary)",
+                    background: "var(--bg-input)",
+                    borderBottom: "1px solid var(--border-clr)",
                     cursor: c.sortable !== false ? "pointer" : "default",
                     fontSize: 12,
                     letterSpacing: 0.5,
@@ -177,8 +177,8 @@ export default function DataTable<T extends Record<string, unknown>>({
                   className="text-center"
                   style={{
                     padding: 48,
-                    color: "#64748B",
-                    background: "#151d2e",
+                    color: "var(--text-muted)",
+                    background: "var(--bg-surface)",
                     fontSize: 14,
                   }}
                 >
@@ -193,7 +193,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                   className="transition-colors duration-150"
                   style={{ cursor: onRowClick ? "pointer" : "default" }}
                   onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLTableRowElement).style.background = "#1a2236";
+                    (e.currentTarget as HTMLTableRowElement).style.background = "var(--hover-bg)";
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLTableRowElement).style.background = "transparent";
@@ -205,8 +205,8 @@ export default function DataTable<T extends Record<string, unknown>>({
                       className="whitespace-nowrap"
                       style={{
                         padding: "11px 16px",
-                        borderBottom: "1px solid #1e293b",
-                        color: "#F1F5F9",
+                        borderBottom: "1px solid var(--border-clr)",
+                        color: "var(--text-primary)",
                       }}
                     >
                       {c.render
@@ -222,7 +222,7 @@ export default function DataTable<T extends Record<string, unknown>>({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-[14px] text-[13px]" style={{ color: "#94A3B8" }}>
+        <div className="flex items-center justify-between mt-[14px] text-[13px]" style={{ color: "var(--text-secondary)" }}>
           <span>
             Page {page + 1} of {totalPages}
           </span>
@@ -232,9 +232,9 @@ export default function DataTable<T extends Record<string, unknown>>({
               onClick={() => setPage((p) => p - 1)}
               className="flex items-center gap-1 rounded-lg px-3 py-[6px] text-xs font-sans"
               style={{
-                background: "#111827",
-                border: "1px solid #1e293b",
-                color: "#F1F5F9",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-clr)",
+                color: "var(--text-primary)",
                 cursor: page === 0 ? "not-allowed" : "pointer",
                 opacity: page === 0 ? 0.4 : 1,
               }}
@@ -247,9 +247,9 @@ export default function DataTable<T extends Record<string, unknown>>({
               onClick={() => setPage((p) => p + 1)}
               className="flex items-center gap-1 rounded-lg px-3 py-[6px] text-xs font-sans"
               style={{
-                background: "#111827",
-                border: "1px solid #1e293b",
-                color: "#F1F5F9",
+                background: "var(--bg-input)",
+                border: "1px solid var(--border-clr)",
+                color: "var(--text-primary)",
                 cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
                 opacity: page >= totalPages - 1 ? 0.4 : 1,
               }}
