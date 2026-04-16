@@ -8,8 +8,8 @@ import InputField from "@/components/ui/InputField";
 import Btn from "@/components/ui/Btn";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@ecgplatform.com");
-  const [password, setPassword] = useState("Admin123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
