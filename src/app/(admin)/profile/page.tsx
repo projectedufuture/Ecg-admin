@@ -27,10 +27,11 @@ export default function ProfilePage() {
   const { admin, updateAdmin } = useAuth();
 
   // Personal info
-  const [name, setName]       = useState(admin?.name || "");
-  const [email, setEmail]     = useState(admin?.email || "");
-  const [saved, setSaved]     = useState(false);
-  const [saving, setSaving]   = useState(false);
+  const [name, setName]             = useState(admin?.name || "");
+  const [email, setEmail]           = useState(admin?.email || "");
+  const [saved, setSaved]           = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   // Password change
   const [currentPw, setCurrentPw]   = useState("");
@@ -42,13 +43,36 @@ export default function ProfilePage() {
 
   if (!admin) return null;
 
-  // ── Save profile (local update only — name/email is read-only from DB) ──
-  const handleSaveProfile = () => {
+  // ── Save profile (persists to database) ──
+  const handleSaveProfile = async () => {
+    setProfileError("");
+    setSaved(false);
+
+    if (!name.trim()) { setProfileError("Name cannot be empty."); return; }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setProfileError("Please enter a valid email address.");
+      return;
+    }
+
     setSaving(true);
-    updateAdmin({ ...admin, name, email });
-    setSaved(true);
-    setSaving(false);
-    setTimeout(() => setSaved(false), 2500);
+    try {
+      const res = await api.put<{ success: boolean; data: { id: string; name: string; email: string; role: string; clientId: string | null }; error: string | null }>(
+        "/admin/profile",
+        { name: name.trim(), email: email.trim() }
+      );
+      const updated = (res as Record<string, unknown>).data as typeof admin;
+      if (updated) {
+        updateAdmin({ ...admin, ...updated });
+        setName(updated.name);
+        setEmail(updated.email);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: unknown) {
+      setProfileError(err instanceof Error ? err.message : "Failed to update profile.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Change password ──────────────────────────────────────────────────────
@@ -118,6 +142,16 @@ export default function ProfilePage() {
               </p>
             </div>
           </div>
+
+          {profileError && (
+            <div
+              className="flex items-center gap-2 rounded-[10px] mb-4 text-[13px]"
+              style={{ padding: "10px 14px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", color: "#EF4444" }}
+            >
+              <AlertCircle size={14} />
+              {profileError}
+            </div>
+          )}
 
           <InputField label="Full Name"      icon={User} value={name}  onChange={setName}  placeholder="Your name" />
           <InputField label="Email Address"  icon={Mail} value={email} onChange={setEmail} type="email" placeholder="your@email.com" />

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Admin } from "@/types";
-import { setAccessToken, getAccessToken, api } from "./api";
+import { setAccessToken, getAccessToken, apiFetch, api } from "./api";
 
 const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
@@ -82,13 +82,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Please enter both email and password.");
       }
 
-      // POST to backend /admin/login
-      const response = await api.post<{
+      // skipAuth: true → avoids 401-retry/redirect so login errors surface properly
+      const response = await apiFetch<{
         success: boolean;
         accessToken: string;
         admin: Admin;
         error: string | null;
-      }>("/admin/login", { email, password });
+      }>("/admin/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+        skipAuth: true,
+      });
 
       if (!response.accessToken || !response.admin) {
         throw new Error(response.error || "Login failed");
