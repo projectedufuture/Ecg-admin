@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "ecgapi-production-9f69.up.railway.app";
 
 let accessToken: string | null = null;
 
