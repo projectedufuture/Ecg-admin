@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "ecgapi-production-9f69.up.railway.app";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ecg-api-7ryx.onrender.com/api";
 
 let accessToken: string | null = null;
 

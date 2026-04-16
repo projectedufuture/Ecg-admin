@@ -33,7 +33,7 @@ export default function UsersPage() {
     );
   }
 
-  const users = (data as Record<string, unknown>)?.items as User[] ?? [];
+  const users = (data?.items as unknown as User[]) ?? [];
 
   return (
     <div>
@@ -46,7 +46,7 @@ export default function UsersPage() {
       </div>
       <DataTable
         columns={columns}
-        data={users}
+        data={users as unknown as Record<string, unknown>[]}
         loading={isLoading}
         onRowClick={(row: Record<string, unknown>) => router.push(`/users/${(row as unknown as User).id}`)}
       />

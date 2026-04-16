@@ -33,7 +33,7 @@ export default function SessionsPage() {
     );
   }
 
-  const sessions = (data as Record<string, unknown>)?.items as Session[] ?? [];
+  const sessions = (data?.items as unknown as Session[]) ?? [];
 
   return (
     <div>
@@ -44,7 +44,7 @@ export default function SessionsPage() {
         </div>
         <Btn variant="ghost" onClick={() => downloadExport("sessions")}><Download size={14} />Export CSV</Btn>
       </div>
-      <DataTable columns={columns} data={sessions} loading={isLoading} onRowClick={(row: Record<string, unknown>) => router.push(`/sessions/${(row as unknown as Session).id}`)} />
+      <DataTable columns={columns} data={sessions as unknown as Record<string, unknown>[]} loading={isLoading} onRowClick={(row: Record<string, unknown>) => router.push(`/sessions/${(row as unknown as Session).id}`)} />
     </div>
   );
 }

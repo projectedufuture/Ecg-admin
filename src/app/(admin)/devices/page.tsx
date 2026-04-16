@@ -53,7 +53,7 @@ export default function DevicesPage() {
     return (<div className="text-center py-20"><AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} /><p className="text-sm mb-4" style={{ color: "#94A3B8" }}>Failed to load devices</p><Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn></div>);
   }
 
-  const devices = (data as Record<string, unknown>)?.items as Device[] ?? [];
+  const devices = (data?.items as unknown as Device[]) ?? [];
   const onlineCount = devices.filter(d => (Date.now() - new Date(d.lastSeen).getTime()) / 3600000 < 24).length;
 
   return (
@@ -68,7 +68,7 @@ export default function DevicesPage() {
         <MetricCard icon={ShieldCheck} label="Licensed" value={devices.filter(d => d.licenseStatus === "active").length} color="#8B5CF6" />
         <MetricCard icon={XCircle} label="Inactive" value={devices.filter(d => d.licenseStatus !== "active").length} color="#EF4444" />
       </div>
-      <DataTable columns={columns} data={devices} loading={isLoading} onRowClick={(row: Record<string, unknown>) => router.push(`/devices/${(row as unknown as Device).id}`)} />
+      <DataTable columns={columns} data={devices as unknown as Record<string, unknown>[]} loading={isLoading} onRowClick={(row: Record<string, unknown>) => router.push(`/devices/${(row as unknown as Device).id}`)} />
       <Modal open={showRegister} title="Register New Device" onClose={() => { setShowRegister(false); setRegSuccess(false); setRegError(""); }}>
         {regSuccess ? (
           <div className="text-center py-5"><div className="inline-flex items-center justify-center mb-4" style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(16,185,129,0.12)" }}><CheckCircle2 size={24} color="#10B981" /></div><h3 className="text-[17px] font-bold mb-2" style={{ color: "#F1F5F9" }}>Device Registered</h3><p className="text-[13px]" style={{ color: "#94A3B8" }}><strong style={{ color: "#F1F5F9" }}>{regDeviceId}</strong> has been added to the system.</p></div>

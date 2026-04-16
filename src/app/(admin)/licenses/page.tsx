@@ -49,8 +49,8 @@ export default function LicensesPage() {
 
   if (error) return (<div className="text-center py-20"><AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} /><p className="text-sm mb-4" style={{ color: "#94A3B8" }}>Failed to load licenses</p><Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn></div>);
 
-  const licenses = (data as Record<string, unknown>)?.items as License[] ?? [];
-  const devices = ((devicesData as Record<string, unknown>)?.items as Record<string, unknown>[]) ?? [];
+  const licenses = (data?.items as unknown as License[]) ?? [];
+  const devices = (devicesData?.items as unknown as Record<string, unknown>[]) ?? [];
   const unlicensedDevices = devices.filter(d => !licenses.find(l => l.deviceId === (d.id as string) && l.status === "active"));
 
   return (
@@ -64,7 +64,7 @@ export default function LicensesPage() {
         <MetricCard icon={Shield} label="Inactive" value={licenses.filter(l => l.status === "inactive").length} color="#EF4444" />
         <MetricCard icon={AlertCircle} label="Expired" value={licenses.filter(l => l.status === "expired").length} color="#F59E0B" />
       </div>
-      <DataTable columns={columns} data={licenses} loading={isLoading} />
+      <DataTable columns={columns} data={licenses as unknown as Record<string, unknown>[]} loading={isLoading} />
       <Modal open={showGenerate} title="Generate Device License" onClose={() => { setShowGenerate(false); setGenSuccess(false); setGenError(""); }}>
         {genSuccess ? (
           <div className="text-center py-[10px]">
