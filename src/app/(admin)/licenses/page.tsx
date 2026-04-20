@@ -10,9 +10,12 @@ import Modal from "@/components/ui/Modal";
 import InputField from "@/components/ui/InputField";
 import { useLicenses, useDevices } from "@/lib/hooks";
 import { api, downloadExport } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { License } from "@/types";
 
 export default function LicensesPage() {
+  const { admin } = useAuth();
+  const canManageLicenses = admin?.role === "super_admin";
   const { data, error, isLoading, mutate } = useLicenses();
   const { data: devicesData } = useDevices({ limit: 100 });
   const [showGenerate, setShowGenerate] = useState(false);
@@ -57,7 +60,7 @@ export default function LicensesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Licenses</h1><p className="text-[13px] mt-1" style={{ color: "var(--text-muted)" }}>Per-device license management</p></div>
-        <div className="flex gap-2"><Btn onClick={() => { setShowGenerate(true); setGenSuccess(false); setGenDeviceId(""); setGenError(""); }}><Key size={14} />Generate License</Btn><Btn variant="ghost" onClick={() => downloadExport("licenses")}><Download size={14} />Export</Btn></div>
+        <div className="flex gap-2">{canManageLicenses && <Btn onClick={() => { setShowGenerate(true); setGenSuccess(false); setGenDeviceId(""); setGenError(""); }}><Key size={14} />Generate License</Btn>}<Btn variant="ghost" onClick={() => downloadExport("licenses")}><Download size={14} />Export</Btn></div>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-5">
         <MetricCard icon={ShieldCheck} label="Active Licenses" value={licenses.filter(l => l.status === "active").length} color="#10B981" />

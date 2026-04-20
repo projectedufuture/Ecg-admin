@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { Admin } from "@/types";
 import { setAccessToken, getAccessToken, apiFetch, api } from "./api";
 
-const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const INACTIVITY_TIMEOUT_MINUTES = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_INACTIVITY_TIMEOUT_MINUTES);
+  return Number.isFinite(raw) && raw > 0 ? raw : 30;
+})();
+const INACTIVITY_TIMEOUT = INACTIVITY_TIMEOUT_MINUTES * 60 * 1000;
 
 interface AuthState {
   admin: Admin | null;

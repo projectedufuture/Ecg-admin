@@ -2,27 +2,56 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Next.js middleware: lightweight client-side route protection.
- * 
- * Since the access token is stored in memory (not cookies accessible to middleware),
- * we check for the presence of the ecg_admin session marker. The real auth check
- * happens in the (admin)/layout.tsx via AuthContext + the API's 401 handling.
- * 
- * This middleware provides an immediate redirect for users who navigate directly
- * to admin URLs without having logged in at all.
+ * Next.js middleware: server-side route gate for the (admin) group.
+ *
+ * The access token lives in memory / sessionStorage, which the Edge runtime
+ * cannot see. The backend, however, sets an httpOnly `refreshToken` cookie
+ * on login — its presence is a cheap, forgery-resistant signal that the
+ * browser has an active session. If it's missing on an admin route, kick
+ * the user to /login immediately instead of loading a layout that will
+ * redirect them in React.
+ *
+ * Final JWT validation still happens inside AuthContext + the API layer.
  */
+
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+
+// Paths rendered by the `app/(admin)/*` group. Route groups are invisible in
+// the URL, so we list the real segments here.
+const ADMIN_PATHS = [
+  "/dashboard",
+  "/users",
+  "/sessions",
+  "/devices",
+  "/licenses",
+  "/profile",
+];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public routes that don't need auth
-  const publicPaths = ["/login", "/forgot-password", "/reset-password", "/api"];
-  if (publicPaths.some((p) => pathname.startsWith(p)) || pathname === "/") {
+  if (
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    pathname === "/" ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next")
+  ) {
     return NextResponse.next();
   }
 
-  // For admin routes, we rely on the client-side AuthProvider for the actual
-  // JWT validation. This middleware just provides a fast redirect if there's
-  // clearly no session at all (no cookies from the backend).
+  const isAdminPath = ADMIN_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
+  if (!isAdminPath) return NextResponse.next();
+
+  const hasSession = Boolean(request.cookies.get("refreshToken")?.value);
+  if (!hasSession) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("from", pathname);
+    return NextResponse.redirect(url);
+  }
+
   return NextResponse.next();
 }
 

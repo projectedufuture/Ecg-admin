@@ -12,10 +12,13 @@ import InputField from "@/components/ui/InputField";
 import { useDevices } from "@/lib/hooks";
 import { api, downloadExport } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import { Device } from "@/types";
 
 export default function DevicesPage() {
   const router = useRouter();
+  const { admin } = useAuth();
+  const canRegisterDevice = admin?.role === "super_admin";
   const { data, error, isLoading, mutate } = useDevices();
   const [showRegister, setShowRegister] = useState(false);
   const [regDeviceId, setRegDeviceId] = useState("");
@@ -60,7 +63,7 @@ export default function DevicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Devices</h1><p className="text-[13px] mt-1" style={{ color: "var(--text-muted)" }}>Registered wearable device inventory</p></div>
-        <div className="flex gap-2"><Btn onClick={() => setShowRegister(true)}><Plus size={14} />Register Device</Btn><Btn variant="ghost" onClick={() => downloadExport("devices")}><Download size={14} />Export CSV</Btn></div>
+        <div className="flex gap-2">{canRegisterDevice && <Btn onClick={() => setShowRegister(true)}><Plus size={14} />Register Device</Btn>}<Btn variant="ghost" onClick={() => downloadExport("devices")}><Download size={14} />Export CSV</Btn></div>
       </div>
       <div className="grid grid-cols-4 gap-3 mb-5">
         <MetricCard icon={Radio} label="Total Devices" value={devices.length} color="#06B6D4" />
