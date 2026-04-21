@@ -28,6 +28,10 @@ export interface Device {
   hardwareVersion: string;
   licenseStatus: "active" | "inactive" | "expired";
   batteryLevel: number;
+  createdAt?: string;
+  licenseKey?: string | null;
+  licenseId?: string | null;
+  licenseExpiry?: string | null;
 }
 
 export interface Session {
@@ -55,6 +59,7 @@ export interface License {
   status: "active" | "inactive" | "expired";
   activationDate: string;
   expiryDate: string;
+  createdAt?: string;
 }
 
 export interface Reading {
