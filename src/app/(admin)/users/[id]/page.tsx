@@ -151,6 +151,11 @@ export default function UserDetailPage() {
   ];
 
   const hasDevice = Boolean(user.deviceId);
+  const userStatus = user.status as string;
+  const userLocation = user.lastLocation as
+    | { lat: number | null; lng: number | null; address: string | null; capturedAt: string | null }
+    | null
+    | undefined;
 
   return (
     <div>
@@ -198,6 +203,62 @@ export default function UserDetailPage() {
                 </span>
               </div>
             ))}
+          </div>
+
+          {/* Location section */}
+          <div className="mt-6 pt-6" style={{ borderTop: "1px solid var(--border-clr)" }}>
+            <div className="text-[11px] uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
+              Location
+            </div>
+            {userStatus !== "active" ? (
+              <div
+                className="rounded-[10px] text-[13px] flex items-center gap-2"
+                style={{
+                  padding: "10px 14px",
+                  background: "rgba(148,163,184,0.12)",
+                  border: "1px solid rgba(148,163,184,0.35)",
+                  color: "#94A3B8",
+                }}
+              >
+                <AlertCircle size={14} />
+                Not Activated — user has not logged in recently.
+              </div>
+            ) : userLocation && userLocation.lat != null && userLocation.lng != null ? (
+              <div
+                className="rounded-[10px]"
+                style={{ background: "var(--bg-input)", border: "1px solid var(--border-clr)", padding: "12px 14px" }}
+              >
+                <div className="text-[13px] mb-1" style={{ color: "var(--text-primary)" }}>
+                  {userLocation.address || `${userLocation.lat.toFixed(5)}, ${userLocation.lng.toFixed(5)}`}
+                </div>
+                <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  {userLocation.capturedAt
+                    ? `Captured ${new Date(userLocation.capturedAt).toLocaleString()}`
+                    : "Coordinates"}
+                </div>
+                <a
+                  href={`https://www.google.com/maps?q=${userLocation.lat},${userLocation.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[12px]"
+                  style={{ color: "#06B6D4" }}
+                >
+                  Open in Google Maps →
+                </a>
+              </div>
+            ) : (
+              <div
+                className="rounded-[10px] text-[13px]"
+                style={{
+                  padding: "10px 14px",
+                  background: "var(--bg-input)",
+                  border: "1px solid var(--border-clr)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                No location captured yet.
+              </div>
+            )}
           </div>
 
           {/* Device section */}

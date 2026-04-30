@@ -62,6 +62,48 @@ export default function UsersPage() {
       render: (v: unknown) =>
         v ? String(v) : <span style={{ color: "var(--text-muted)" }}>—</span>,
     },
+    {
+      key: "lastLocation",
+      label: "Location",
+      sortable: false,
+      render: (_v: unknown, row: Record<string, unknown>) => {
+        const u = row as unknown as User;
+        if (u.status !== "active") {
+          return (
+            <span
+              className="inline-flex items-center rounded-[8px] text-[11px] font-semibold"
+              style={{
+                padding: "3px 10px",
+                background: "rgba(148,163,184,0.12)",
+                border: "1px solid rgba(148,163,184,0.35)",
+                color: "#94A3B8",
+              }}
+            >
+              Not Activated
+            </span>
+          );
+        }
+        const loc = u.lastLocation;
+        if (!loc || loc.lat == null || loc.lng == null) {
+          return <span style={{ color: "var(--text-muted)" }}>—</span>;
+        }
+        const label = loc.address || `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+        const mapsUrl = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+        return (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs"
+            style={{ color: "#06B6D4", textDecoration: "none" }}
+            title={`${loc.lat}, ${loc.lng}`}
+          >
+            {label}
+          </a>
+        );
+      },
+    },
     { key: "status", label: "Status", render: (v: unknown) => <StatusBadge status={v as string} /> },
   ];
 

@@ -8,6 +8,14 @@ export interface Admin {
   clientId?: string;
 }
 
+export interface UserLocation {
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  address: string | null;
+  capturedAt: string | null;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -17,6 +25,7 @@ export interface User {
   status: "active" | "inactive";
   deviceId: string | null;
   sessions: number;
+  lastLocation?: UserLocation | null;
 }
 
 export interface Device {
@@ -36,6 +45,13 @@ export interface Device {
   licenseExpiry?: string | null;
 }
 
+export interface SessionLocation {
+  lat: number | null;
+  lng: number | null;
+  accuracy: number | null;
+  address: string | null;
+}
+
 export interface Session {
   id: string;
   userId: string;
@@ -51,6 +67,7 @@ export interface Session {
   avgHR: number;
   minHR: number;
   maxHR: number;
+  location?: SessionLocation | null;
 }
 
 export interface License {
