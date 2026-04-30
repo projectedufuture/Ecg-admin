@@ -29,6 +29,8 @@ export interface Device {
   licenseStatus: "active" | "inactive" | "expired";
   batteryLevel: number;
   createdAt?: string;
+  pairedAt?: string | null;
+  isPaired?: boolean;
   licenseKey?: string | null;
   licenseId?: string | null;
   licenseExpiry?: string | null;

@@ -126,7 +126,26 @@ export default function DevicesPage() {
         );
       },
     },
-    { key: "licenseStatus", label: "License", render: (v: unknown) => <StatusBadge status={v as string} /> },
+    {
+      key: "isPaired",
+      label: "Paired",
+      render: (v: unknown) => {
+        const paired = Boolean(v);
+        return (
+          <span
+            className="inline-flex items-center gap-1 rounded-[8px] text-[11px] font-semibold"
+            style={{
+              padding: "3px 10px",
+              background: paired ? "rgba(16,185,129,0.12)" : "rgba(148,163,184,0.12)",
+              border: `1px solid ${paired ? "rgba(16,185,129,0.35)" : "rgba(148,163,184,0.35)"}`,
+              color: paired ? "#10B981" : "#94A3B8",
+            }}
+          >
+            {paired ? "Paired" : "Not Paired"}
+          </span>
+        );
+      },
+    },
   ];
 
   const resetRegister = () => {
