@@ -7,9 +7,10 @@ import { useDashboard } from "@/lib/hooks";
 import Btn from "@/components/ui/Btn";
 
 // ── Utility ──────────────────────────────────────────────────────
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const FALLBACK_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function niceMax(val: number): number {
+  if (val <= 0) return 5;
   const mag = Math.pow(10, Math.floor(Math.log10(val)));
   const norm = val / mag;
   if (norm <= 1.5) return Math.ceil(norm * 10) / 10 * mag;
@@ -20,9 +21,10 @@ function niceMax(val: number): number {
 
 // ── Professional chart ───────────────────────────────────────────
 function ChartCard({
-  data, color, title, icon: Icon,
+  data, labels, color, title, icon: Icon,
 }: {
   data: number[];
+  labels: string[];
   color: string;
   title: string;
   icon: React.ElementType;
@@ -203,7 +205,7 @@ function ChartCard({
                 {/* Tooltip card */}
                 <rect x={tx} y={ty} width={tipW} height={tipH} rx="8" fill="var(--bg-elevated)" stroke="var(--border-clr)" strokeWidth="1" />
                 <text x={tx + tipW / 2} y={ty + 16} textAnchor="middle" fontSize="10" fontWeight="500" fill="var(--text-muted)">
-                  {MONTHS[hover]} 2025
+                  {labels[hover]} 2025
                 </text>
                 <text x={tx + tipW / 2} y={ty + 33} textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>
                   {p.v}
@@ -243,7 +245,7 @@ function ChartCard({
               fill={hover === i ? color : "var(--text-muted)"}
               style={{ transition: "fill 0.15s" }}
             >
-              {MONTHS[i]}
+              {labels[i]}
             </text>
           ))}
         </svg>
@@ -255,10 +257,10 @@ function ChartCard({
         style={{ borderTop: "1px solid var(--border-clr)" }}
       >
         {[
-          { label: "Lowest", value: stats.min, sub: MONTHS[data.indexOf(stats.min)] },
+          { label: "Lowest", value: stats.min, sub: labels[data.indexOf(stats.min)] },
           { label: "Average", value: stats.avg, sub: "per month" },
-          { label: "Highest", value: stats.max, sub: MONTHS[stats.peakIdx] },
-          { label: "Current", value: data[data.length - 1], sub: MONTHS[data.length - 1] },
+          { label: "Highest", value: stats.max, sub: labels[stats.peakIdx] },
+          { label: "Current", value: data[data.length - 1], sub: labels[data.length - 1] },
         ].map((s, i) => (
           <div
             key={i}
@@ -343,8 +345,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <ChartCard data={regData} color="#06B6D4" title="User Registrations" icon={TrendingUp} />
-        <ChartCard data={sessData} color="#10B981" title="Sessions Recorded" icon={FileText} />
+        <ChartCard data={regData} labels={FALLBACK_MONTHS} color="#06B6D4" title="User Registrations" icon={TrendingUp} />
+        <ChartCard data={sessData} labels={FALLBACK_MONTHS} color="#10B981" title="Sessions Recorded" icon={FileText} />
       </div>
     </div>
   );

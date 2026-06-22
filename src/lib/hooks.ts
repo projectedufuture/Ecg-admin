@@ -25,7 +25,9 @@ function buildQuery(params: Record<string, unknown>): string {
 // ─── Dashboard ───
 export function useDashboard(config?: SWRConfiguration) {
   return useSWR("/admin/dashboard", swrFetcher, {
-    refreshInterval: 30000,
+    refreshInterval: 5000,        // poll every 5s for live feel
+    revalidateOnFocus: true,      // refresh when user clicks back to tab
+    revalidateOnReconnect: true,
     ...config,
   });
 }
