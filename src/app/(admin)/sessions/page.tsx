@@ -15,6 +15,7 @@ export default function SessionsPage() {
 
   const columns = [
     { key: "id", label: "Session ID" },
+    { key: "name", label: "Name", render: (v: unknown) => (v as string) || "—" },
     { key: "userName", label: "User" },
     { key: "startTime", label: "Start", render: (v: unknown) => new Date(v as string).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) },
     { key: "duration", label: "Duration", render: (v: unknown) => `${v} min` },

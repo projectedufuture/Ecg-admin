@@ -54,6 +54,7 @@ export interface SessionLocation {
 
 export interface Session {
   id: string;
+  name: string | null;
   userId: string;
   userEmail: string;
   userName: string;

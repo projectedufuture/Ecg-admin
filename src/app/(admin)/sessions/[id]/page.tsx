@@ -11,20 +11,6 @@ import { useSessionDetail } from "@/lib/hooks";
 import { downloadExport } from "@/lib/api";
 import { formatTime } from "@/lib/utils";
 
-function generateECGFallback(count: number = 1200): number[] {
-  const d: number[] = [];
-  for (let i = 0; i < count; i++) {
-    const t = (i % 100) / 100; let v = 0;
-    if (t > 0.05 && t < 0.10) v = Math.sin((t - 0.05) * Math.PI / 0.05) * 0.15;
-    else if (t > 0.15 && t < 0.18) v = -0.08;
-    else if (t > 0.18 && t < 0.22) v = Math.sin((t - 0.18) * Math.PI / 0.04) * 1.0;
-    else if (t > 0.22 && t < 0.26) v = -0.2;
-    else if (t > 0.30 && t < 0.42) v = Math.sin((t - 0.30) * Math.PI / 0.12) * 0.25;
-    v += (Math.random() - 0.5) * 0.03; d.push(v);
-  }
-  return d;
-}
-
 export default function SessionDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -34,43 +20,30 @@ export default function SessionDetailPage() {
 
   const session = data as Record<string, unknown> | undefined;
 
+  // Real ECG samples only — no synthetic fallback. Empty array => "no data" state.
   const ecgData = useMemo(() => {
     if (!session) return [];
     const readings = session.readings as { ecgValue: number }[] | undefined;
     const ecgValues = session.ecgValues as number[] | undefined;
     if (ecgValues && ecgValues.length > 0) return ecgValues;
     if (readings && readings.length > 0) return readings.map(r => r.ecgValue);
-    return generateECGFallback(1200);
+    return [];
   }, [session]);
 
-  const hrData = useMemo(() => {
-    if (!session) return [];
-    const readings = session.readings as { ecgValue: number; temperatureCelsius: number }[] | undefined;
-    if (readings && readings.length > 0) {
-      return Array.from({ length: 40 }, () => {
-        const minHR = (session.minHR as number) || 60;
-        const maxHR = (session.maxHR as number) || 100;
-        return minHR + Math.random() * (maxHR - minHR);
-      });
-    }
-    const minHR = (session.minHR as number) || 60;
-    const maxHR = (session.maxHR as number) || 100;
-    return Array.from({ length: 40 }, () => minHR + Math.random() * (maxHR - minHR));
-  }, [session]);
-
+  // Real temperature series from stored readings only (downsampled for the chart).
   const tempData = useMemo(() => {
     if (!session) return [];
     const readings = session.readings as { temperatureCelsius: number }[] | undefined;
     const temperatureValues = session.temperatureValues as number[] | undefined;
-    if (temperatureValues && temperatureValues.length > 0) {
-      const step = Math.max(1, Math.floor(temperatureValues.length / 30));
-      return Array.from({ length: Math.min(30, temperatureValues.length) }, (_, i) => temperatureValues[i * step] || 36.5);
-    }
-    if (readings && readings.length > 0) {
-      const step = Math.max(1, Math.floor(readings.length / 30));
-      return Array.from({ length: 30 }, (_, i) => readings[Math.min(i * step, readings.length - 1)]?.temperatureCelsius || 36.5);
-    }
-    return Array.from({ length: 30 }, () => 36.1 + Math.random() * 1.3);
+    const source =
+      temperatureValues && temperatureValues.length > 0
+        ? temperatureValues
+        : readings && readings.length > 0
+          ? readings.map(r => r.temperatureCelsius)
+          : [];
+    if (source.length === 0) return [];
+    const step = Math.max(1, Math.floor(source.length / 30));
+    return Array.from({ length: Math.min(30, source.length) }, (_, i) => source[i * step]);
   }, [session]);
 
   if (isLoading) {
@@ -91,21 +64,32 @@ export default function SessionDetailPage() {
     { l: "Duration", v: `${session.duration} min`, i: Clock, c: "#06B6D4" },
     { l: "Avg Heart Rate", v: `${session.avgHR} bpm`, i: Heart, c: "#F43F5E" },
     { l: "HR Range", v: `${session.minHR}–${session.maxHR} bpm`, i: Activity, c: "#8B5CF6" },
-    { l: "Avg Temperature", v: `${session.avgTemp}°C`, i: Thermometer, c: "#F59E0B" },
+    { l: "Avg Temperature", v: `${Number(session.avgTemp).toFixed(1)}°C`, i: Thermometer, c: "#F59E0B" },
     { l: "Data Source", v: session.dataSource as string, i: Wifi, c: "#10B981" },
   ];
 
+  const sessionName = (session.name as string) || null;
+
   const sessionInfo = [
     ["Session ID", session.id as string],
+    ...(sessionName ? [["Name", sessionName]] : []),
     ["User", session.userName as string],
     ["Device", session.deviceId as string],
     ["Start", new Date(session.startTime as string).toLocaleString()],
     ["End", new Date(session.endTime as string).toLocaleString()],
   ];
 
+  // Real temperature range from stored samples (null when nothing recorded).
+  const tempMin = tempData.length ? Math.min(...tempData) : null;
+  const tempMax = tempData.length ? Math.max(...tempData) : null;
+
+  const noData = (label: string) => (
+    <div className="flex items-center justify-center" style={{ height: 80, color: "var(--text-muted)", fontSize: 12 }}>{label}</div>
+  );
+
   return (
     <div>
-      <Breadcrumbs items={[{ label: "Sessions", onClick: () => router.push("/sessions") }, { label: session.id as string }]} />
+      <Breadcrumbs items={[{ label: "Sessions", onClick: () => router.push("/sessions") }, { label: sessionName ? `${sessionName} · ${session.id}` : (session.id as string) }]} />
       <div className="grid grid-cols-5 gap-3 mb-5">
         {metrics.map((m, i) => (
           <div key={i} className="rounded-xl" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)", padding: "16px 18px" }}>
@@ -123,7 +107,13 @@ export default function SessionDetailPage() {
             <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
           </div>
         </div>
-        <ECGWaveform data={ecgData} height={180} zoom={zoomLevel} />
+        {ecgData.length > 0 ? (
+          <ECGWaveform data={ecgData} height={180} zoom={zoomLevel} />
+        ) : (
+          <div className="flex items-center justify-center" style={{ height: 180, borderRadius: 8, background: "#020a05", color: "#4a8a62", fontSize: 13, fontFamily: "monospace", letterSpacing: 1 }}>
+            NO ECG DATA RECORDED FOR THIS SESSION
+          </div>
+        )}
         <div className="flex justify-between mt-[10px] text-[11px]" style={{ color: "var(--text-muted)" }}>
           <span>{formatTime(session.startTime as string)}</span>
           <span className="font-semibold" style={{ color: "#06B6D4" }}>Wellness monitoring only — Not for clinical diagnosis</span>
@@ -133,7 +123,7 @@ export default function SessionDetailPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-2xl p-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
           <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}><Heart size={16} color="#F43F5E" />Heart Rate Trend</h3>
-          <div className="flex items-center justify-center py-3"><MiniChart data={hrData} color="#F43F5E" height={80} width={300} /></div>
+          <div className="flex items-center justify-center py-3">{noData("No heart-rate waveform recorded")}</div>
           <div className="flex justify-around mt-[14px]">
             {[{ l: "Min", v: `${session.minHR} bpm`, c: "#10B981" }, { l: "Avg", v: `${session.avgHR} bpm`, c: "#F43F5E" }, { l: "Max", v: `${session.maxHR} bpm`, c: "#EF4444" }].map((s, i) => (
               <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
@@ -145,9 +135,9 @@ export default function SessionDetailPage() {
         </div>
         <div className="rounded-2xl p-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
           <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}><Thermometer size={16} color="#F59E0B" />Temperature Trend</h3>
-          <div className="flex items-center justify-center py-3"><MiniChart data={tempData} color="#F59E0B" height={80} width={300} /></div>
+          <div className="flex items-center justify-center py-3">{tempData.length > 0 ? <MiniChart data={tempData} color="#F59E0B" height={80} width={300} /> : noData("No temperature data recorded")}</div>
           <div className="flex justify-around mt-[14px]">
-            {[{ l: "Min", v: "36.1°C" }, { l: "Avg", v: `${session.avgTemp}°C` }, { l: "Max", v: "37.4°C" }].map((s, i) => (
+            {[{ l: "Min", v: tempMin != null ? `${tempMin.toFixed(1)}°C` : "—" }, { l: "Avg", v: `${Number(session.avgTemp).toFixed(1)}°C` }, { l: "Max", v: tempMax != null ? `${tempMax.toFixed(1)}°C` : "—" }].map((s, i) => (
               <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{s.v}</div></div>
             ))}
           </div>
