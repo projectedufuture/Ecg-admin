@@ -9,7 +9,7 @@ import MiniChart from "@/components/ui/MiniChart";
 import Btn from "@/components/ui/Btn";
 import { useSessionDetail } from "@/lib/hooks";
 import { downloadExport } from "@/lib/api";
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatDuration } from "@/lib/utils";
 
 export default function SessionDetailPage() {
   const router = useRouter();
@@ -60,13 +60,18 @@ export default function SessionDetailPage() {
     );
   }
 
+  // A session is "ended" once it has been stopped (endTime moves past startTime).
+  // An ended session is no longer a live stream — its data is now stored.
+  const hasEnded = new Date(session.endTime as string).getTime() > new Date(session.startTime as string).getTime();
+  const displaySource = hasEnded && session.dataSource === "live" ? "stored" : (session.dataSource as string);
+
   const metrics = [
-    { l: "Duration", v: `${session.duration} min`, i: Clock, c: "#06B6D4" },
+    { l: "Duration", v: formatDuration(session.startTime as string, session.endTime as string), i: Clock, c: "#06B6D4" },
     { l: "Avg Heart Rate", v: `${session.avgHR} bpm`, i: Heart, c: "#F43F5E" },
     { l: "HR Range", v: `${session.minHR}–${session.maxHR} bpm`, i: Activity, c: "#8B5CF6" },
     { l: "Avg SpO₂", v: `${session.avgSpo2}%`, i: Droplets, c: "#ff5fa2" },
     { l: "Avg Temperature", v: `${Number(session.avgTemp).toFixed(1)}°C`, i: Thermometer, c: "#F59E0B" },
-    { l: "Data Source", v: session.dataSource as string, i: Wifi, c: "#10B981" },
+    { l: "Data Source", v: displaySource, i: Wifi, c: "#10B981" },
   ];
 
   const sessionName = (session.name as string) || null;

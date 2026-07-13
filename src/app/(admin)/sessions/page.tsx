@@ -7,6 +7,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import Btn from "@/components/ui/Btn";
 import { useSessions } from "@/lib/hooks";
 import { downloadExport } from "@/lib/api";
+import { formatDuration } from "@/lib/utils";
 import { Session } from "@/types";
 
 export default function SessionsPage() {
@@ -18,11 +19,15 @@ export default function SessionsPage() {
     { key: "name", label: "Name", render: (v: unknown) => (v as string) || "—" },
     { key: "userName", label: "User" },
     { key: "startTime", label: "Start", render: (v: unknown) => new Date(v as string).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) },
-    { key: "duration", label: "Duration", render: (v: unknown) => `${v} min` },
+    { key: "duration", label: "Duration", render: (_v: unknown, row: Record<string, unknown>) => formatDuration(row.startTime as string, row.endTime as string) },
     { key: "avgHR", label: "Heart Rate", render: (v: unknown) => (<span className="font-semibold inline-flex items-center gap-1" style={{ color: "#F43F5E" }}><Heart size={12} />{v as number} bpm</span>) },
     { key: "avgSpo2", label: "SpO₂", render: (v: unknown) => (<span className="font-semibold inline-flex items-center gap-1" style={{ color: "#ff5fa2" }}><Droplets size={12} />{v as number}%</span>) },
     { key: "avgTemp", label: "Temp", render: (v: unknown) => `${v}°C` },
-    { key: "dataSource", label: "Source", render: (v: unknown) => <StatusBadge status={v as string} /> },
+    { key: "dataSource", label: "Source", render: (v: unknown, row: Record<string, unknown>) => {
+      const ended = new Date(row.endTime as string).getTime() > new Date(row.startTime as string).getTime();
+      const source = ended && v === "live" ? "stored" : (v as string);
+      return <StatusBadge status={source} />;
+    } },
   ];
 
   if (error) {

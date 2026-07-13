@@ -17,6 +17,22 @@ export function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString();
 }
 
+/**
+ * Duration derived from the actual Start→End timestamps, so it can never disagree
+ * with the displayed times (older sessions stored a raw seconds value in `duration`,
+ * which the UI wrongly labelled as minutes). Formats as "Xh Ym", "Y min", or "Zs".
+ */
+export function formatDuration(start: string, end: string): string {
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const totalMin = Math.floor(totalSec / 60);
+  if (totalMin < 60) return `${totalMin} min`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 export function formatRelativeTime(dateStr: string): string {
   const hrs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 3600000);
   if (hrs < 1) return "Just now";
