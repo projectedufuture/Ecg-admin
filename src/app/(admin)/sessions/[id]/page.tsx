@@ -46,6 +46,16 @@ export default function SessionDetailPage() {
     return Array.from({ length: Math.min(30, source.length) }, (_, i) => source[i * step]);
   }, [session]);
 
+  // Real heart-rate & SpO₂ series from stored readings (0 = no-finger, excluded).
+  const seriesFrom = (values: number[] | undefined, points: number) => {
+    const source = (values || []).filter(v => v > 0);
+    if (source.length === 0) return [];
+    const step = Math.max(1, Math.floor(source.length / points));
+    return Array.from({ length: Math.min(points, source.length) }, (_, i) => source[i * step]);
+  };
+  const hrData = useMemo(() => (session ? seriesFrom(session.hrValues as number[] | undefined, 40) : []), [session]);
+  const spo2Data = useMemo(() => (session ? seriesFrom(session.spo2Values as number[] | undefined, 40) : []), [session]);
+
   if (isLoading) {
     return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-[180px] rounded-2xl animate-pulse" style={{ background: "var(--bg-surface)" }} />)}</div>;
   }
@@ -129,7 +139,7 @@ export default function SessionDetailPage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-2xl p-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
           <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}><Heart size={16} color="#F43F5E" />Heart Rate Trend</h3>
-          <div className="flex items-center justify-center py-3">{noData("No heart-rate waveform recorded")}</div>
+          <div className="flex items-center justify-center py-3">{hrData.length > 0 ? <MiniChart data={hrData} color="#F43F5E" height={80} width={300} /> : noData("No heart-rate data recorded")}</div>
           <div className="flex justify-around mt-[14px]">
             {[{ l: "Min", v: `${session.minHR} bpm`, c: "#10B981" }, { l: "Avg", v: `${session.avgHR} bpm`, c: "#F43F5E" }, { l: "Max", v: `${session.maxHR} bpm`, c: "#EF4444" }].map((s, i) => (
               <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
@@ -137,7 +147,8 @@ export default function SessionDetailPage() {
           </div>
           <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--border-clr)" }}>
             <h4 className="text-[13px] font-semibold mb-[10px] flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Droplets size={14} color="#ff5fa2" />Blood Oxygen (SpO₂)</h4>
-            <div className="flex justify-around">
+            <div className="flex items-center justify-center py-2">{spo2Data.length > 0 ? <MiniChart data={spo2Data} color="#ff5fa2" height={70} width={300} /> : noData("No SpO₂ data recorded")}</div>
+            <div className="flex justify-around mt-2">
               {[{ l: "Min", v: `${session.minSpo2}%`, c: "#10B981" }, { l: "Avg", v: `${session.avgSpo2}%`, c: "#ff5fa2" }, { l: "Max", v: `${session.maxSpo2}%`, c: "#EF4444" }].map((s, i) => (
                 <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
               ))}
