@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Download, Info, AlertCircle, RefreshCw } from "lucide-react";
+import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Download, Info, AlertCircle, RefreshCw, Droplets } from "lucide-react";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import ECGWaveform from "@/components/ui/ECGWaveform";
 import MiniChart from "@/components/ui/MiniChart";
@@ -64,6 +64,7 @@ export default function SessionDetailPage() {
     { l: "Duration", v: `${session.duration} min`, i: Clock, c: "#06B6D4" },
     { l: "Avg Heart Rate", v: `${session.avgHR} bpm`, i: Heart, c: "#F43F5E" },
     { l: "HR Range", v: `${session.minHR}–${session.maxHR} bpm`, i: Activity, c: "#8B5CF6" },
+    { l: "Avg SpO₂", v: `${session.avgSpo2}%`, i: Droplets, c: "#ff5fa2" },
     { l: "Avg Temperature", v: `${Number(session.avgTemp).toFixed(1)}°C`, i: Thermometer, c: "#F59E0B" },
     { l: "Data Source", v: session.dataSource as string, i: Wifi, c: "#10B981" },
   ];
@@ -90,7 +91,7 @@ export default function SessionDetailPage() {
   return (
     <div>
       <Breadcrumbs items={[{ label: "Sessions", onClick: () => router.push("/sessions") }, { label: sessionName ? `${sessionName} · ${session.id}` : (session.id as string) }]} />
-      <div className="grid grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-6 gap-3 mb-5">
         {metrics.map((m, i) => (
           <div key={i} className="rounded-xl" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)", padding: "16px 18px" }}>
             <div className="flex items-center gap-[6px] mb-2"><m.i size={14} style={{ color: m.c }} /><span className="text-[11px] uppercase" style={{ color: "var(--text-muted)", letterSpacing: 0.5 }}>{m.l}</span></div>
@@ -129,8 +130,16 @@ export default function SessionDetailPage() {
               <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
             ))}
           </div>
+          <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--border-clr)" }}>
+            <h4 className="text-[13px] font-semibold mb-[10px] flex items-center gap-2" style={{ color: "var(--text-secondary)" }}><Droplets size={14} color="#ff5fa2" />Blood Oxygen (SpO₂)</h4>
+            <div className="flex justify-around">
+              {[{ l: "Min", v: `${session.minSpo2}%`, c: "#10B981" }, { l: "Avg", v: `${session.avgSpo2}%`, c: "#ff5fa2" }, { l: "Max", v: `${session.maxSpo2}%`, c: "#EF4444" }].map((s, i) => (
+                <div key={i} className="text-center"><div className="text-[11px] mb-[2px]" style={{ color: "var(--text-muted)" }}>{s.l}</div><div className="text-base font-bold" style={{ color: s.c }}>{s.v}</div></div>
+              ))}
+            </div>
+          </div>
           <div className="mt-[14px] rounded-[10px] text-xs flex items-start gap-2" style={{ padding: "10px 14px", background: "rgba(244,63,94,0.12)", color: "var(--text-secondary)" }}>
-            <Info size={14} color="#F43F5E" className="shrink-0 mt-[1px]" /><span>Heart rate from MAX30102 PPG sensor (PCB-F, left chest). Firmware peak detection with motion artifact filtering via SQI thresholding.</span>
+            <Info size={14} color="#F43F5E" className="shrink-0 mt-[1px]" /><span>Heart rate &amp; SpO₂ from MAX30102 PPG sensor (PCB-F, left chest). Firmware peak detection with motion artifact filtering via SQI thresholding.</span>
           </div>
         </div>
         <div className="rounded-2xl p-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>

@@ -68,6 +68,9 @@ export interface Session {
   avgHR: number;
   minHR: number;
   maxHR: number;
+  avgSpo2: number;
+  minSpo2: number;
+  maxSpo2: number;
   location?: SessionLocation | null;
 }
 
