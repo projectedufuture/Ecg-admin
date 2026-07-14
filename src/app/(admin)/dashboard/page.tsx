@@ -205,7 +205,7 @@ function ChartCard({
                 {/* Tooltip card */}
                 <rect x={tx} y={ty} width={tipW} height={tipH} rx="8" fill="var(--bg-elevated)" stroke="var(--border-clr)" strokeWidth="1" />
                 <text x={tx + tipW / 2} y={ty + 16} textAnchor="middle" fontSize="10" fontWeight="500" fill="var(--text-muted)">
-                  {labels[hover]} 2025
+                  {labels[hover]}
                 </text>
                 <text x={tx + tipW / 2} y={ty + 33} textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>
                   {p.v}
@@ -322,8 +322,12 @@ export default function DashboardPage() {
   const activeDevices = (d?.activeDevices as number) ?? 0;
   const activeLicenses = (d?.activeLicenses as number) ?? 0;
   const trends = (d?.trends as Record<string, number>) ?? {};
-  const regData = [12, 18, 8, 22, 15, 28, 34, 19, 25, 31, 20, 27];
-  const sessData = [45, 62, 38, 71, 55, 80, 92, 67, 78, 95, 60, 85];
+
+  // Real monthly series from the backend (last 12 months). Falls back to zeros.
+  const charts = (d?.charts as { labels?: string[]; usersMonthly?: number[]; sessionsMonthly?: number[] }) ?? {};
+  const months = charts.labels?.length ? charts.labels : FALLBACK_MONTHS;
+  const regData = charts.usersMonthly?.length ? charts.usersMonthly : new Array(12).fill(0);
+  const sessData = charts.sessionsMonthly?.length ? charts.sessionsMonthly : new Array(12).fill(0);
 
   return (
     <div>
@@ -345,8 +349,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <ChartCard data={regData} labels={FALLBACK_MONTHS} color="#06B6D4" title="User Registrations" icon={TrendingUp} />
-        <ChartCard data={sessData} labels={FALLBACK_MONTHS} color="#10B981" title="Sessions Recorded" icon={FileText} />
+        <ChartCard data={regData} labels={months} color="#06B6D4" title="User Registrations" icon={TrendingUp} />
+        <ChartCard data={sessData} labels={months} color="#10B981" title="Sessions Recorded" icon={FileText} />
       </div>
     </div>
   );

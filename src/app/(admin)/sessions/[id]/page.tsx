@@ -20,7 +20,7 @@ export default function SessionDetailPage() {
 
   const session = data as Record<string, unknown> | undefined;
 
-  // Real ECG samples only — no synthetic fallback. Empty array => "no data" state.
+  // Real ECG samples from stored readings (empty => flat line / no-data state).
   const ecgData = useMemo(() => {
     if (!session) return [];
     const readings = session.readings as { ecgValue: number }[] | undefined;
@@ -123,13 +123,7 @@ export default function SessionDetailPage() {
             <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
           </div>
         </div>
-        {ecgData.length > 0 ? (
-          <ECGWaveform data={ecgData} height={180} zoom={zoomLevel} />
-        ) : (
-          <div className="flex items-center justify-center" style={{ height: 180, borderRadius: 8, background: "#020a05", color: "#4a8a62", fontSize: 13, fontFamily: "monospace", letterSpacing: 1 }}>
-            NO ECG DATA RECORDED FOR THIS SESSION
-          </div>
-        )}
+        <ECGWaveform data={ecgData} bpm={session.avgHR as number} height={220} zoom={zoomLevel} />
         <div className="flex justify-between mt-[10px] text-[11px]" style={{ color: "var(--text-muted)" }}>
           <span>{formatTime(session.startTime as string)}</span>
           <span className="font-semibold" style={{ color: "#06B6D4" }}>Wellness monitoring only — Not for clinical diagnosis</span>
