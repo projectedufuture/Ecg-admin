@@ -2,6 +2,16 @@
 
 import useSWR, { SWRConfiguration } from "swr";
 import { swrFetcher } from "@/lib/api";
+import {
+  EcgRrReport,
+  HrvReport,
+  HrvTrend,
+  RespirationReport,
+  RhythmReport,
+  Spo2Report,
+  TemperatureReport,
+  CombinedReport,
+} from "@/types";
 
 // Generic list response from backend (after unwrapping envelope)
 interface ListResponse<T> {
@@ -87,4 +97,85 @@ export function useLicenses(
 ) {
   const query = buildQuery({ page: params.page || 1, limit: params.limit || 25, ...params });
   return useSWR<ListResponse<Record<string, unknown>>>(`/admin/licenses${query}`, swrFetcher, config);
+}
+
+// ─── Reports ───
+/**
+ * ECG/RR analysis for one session.
+ *
+ * The backend serves a stored analysis, so this is a cheap read; it is not
+ * polled on an interval because a finished recording's report does not change.
+ */
+export function useEcgRrReport(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<EcgRrReport>(
+    sessionId ? `/admin/readings/${sessionId}/reports/ecg-rr` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/**
+ * HRV analysis for one session. Computed alongside the ECG/RR analysis from the
+ * same validated NN sequence, so this is a cheap read of a stored result.
+ */
+export function useHrvReport(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<HrvReport>(
+    sessionId ? `/admin/readings/${sessionId}/reports/hrv` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/** The user's HRV across their sessions, for the trend chart. */
+export function useHrvTrend(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<HrvTrend>(
+    sessionId ? `/admin/readings/${sessionId}/reports/hrv/trend` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/** Rhythm screening for one session. */
+export function useRhythmReport(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<RhythmReport>(
+    sessionId ? `/admin/readings/${sessionId}/reports/rhythm` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/** Respiration estimate for one session. */
+export function useRespirationReport(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<RespirationReport>(
+    sessionId ? `/admin/readings/${sessionId}/reports/respiration` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/** SpO₂ analysis for one session. */
+export function useSpo2Report(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<Spo2Report>(
+    sessionId ? `/admin/readings/${sessionId}/reports/spo2` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/** Temperature analysis for one session. */
+export function useTemperatureReport(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<TemperatureReport>(
+    sessionId ? `/admin/readings/${sessionId}/reports/temperature` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
+}
+
+/** Combined cross-signal analysis for one session. */
+export function useCombinedReport(sessionId: string | null, config?: SWRConfiguration) {
+  return useSWR<CombinedReport>(
+    sessionId ? `/admin/readings/${sessionId}/reports/combined` : null,
+    swrFetcher,
+    { revalidateOnFocus: false, ...config }
+  );
 }

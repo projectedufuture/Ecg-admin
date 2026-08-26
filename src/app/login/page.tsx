@@ -38,7 +38,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center mb-4" style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg, #06B6D4, #8B5CF6)" }}>
             <Heart size={28} color="#fff" />
           </div>
-          <h1 className="text-2xl font-bold m-0" style={{ color: "#F1F5F9" }}>ECG Admin Panel</h1>
+          <h1 className="text-2xl font-bold m-0" style={{ color: "#F1F5F9" }}>Biotex Admin Panel</h1>
           <p className="text-sm mt-[6px]" style={{ color: "#64748B" }}>Wearable Wellness Platform</p>
         </div>
         <div className="rounded-[20px] p-8" style={{ background: "#151d2e", border: "1px solid #1e293b" }}>

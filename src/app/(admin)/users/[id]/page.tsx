@@ -232,9 +232,18 @@ export default function UserDetailPage() {
                   {userLocation.address || `${userLocation.lat.toFixed(5)}, ${userLocation.lng.toFixed(5)}`}
                 </div>
                 <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  {userLocation.capturedAt
-                    ? `Captured ${new Date(userLocation.capturedAt).toLocaleString()}`
-                    : "Coordinates"}
+                  {/* Keep the raw coordinates visible even once a place name is
+                      resolved: the name is a lookup, the numbers are the record. */}
+                  {[
+                    userLocation.address
+                      ? `${userLocation.lat.toFixed(5)}, ${userLocation.lng.toFixed(5)}`
+                      : null,
+                    userLocation.capturedAt
+                      ? `Captured ${new Date(userLocation.capturedAt).toLocaleString()}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join("  ·  ") || "Coordinates"}
                 </div>
                 <a
                   href={`https://www.google.com/maps?q=${userLocation.lat},${userLocation.lng}`}

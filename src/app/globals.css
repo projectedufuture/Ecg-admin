@@ -79,3 +79,143 @@ html, body {
 .animate-spin-slow {
   animation: spin 1s linear infinite;
 }
+
+/* ── Print / PDF ───────────────────────────────────
+   The admin shell is a fixed-height flex layout: `h-screen overflow-hidden`
+   wrapping an inner `overflow-auto` scroller. On paper that clips everything
+   below the fold to a single page, so the first job here is to unwind it and
+   let the document flow to its natural height. Everything else is making a
+   dark, interactive screen readable as a static document.
+   ------------------------------------------------- */
+@media print {
+  /* Light palette regardless of the on-screen theme. Printing the dark theme
+     either drains a cartridge or - because browsers drop backgrounds by
+     default - renders pale grey text on white and is illegible. */
+  :root,
+  [data-theme="dark"],
+  [data-theme="light"] {
+    --bg-page:      #FFFFFF;
+    --bg-surface:   #FFFFFF;
+    --bg-elevated:  #FAFBFC;
+    --bg-input:     #F6F8FA;
+    --border-clr:   #C6D0DC;
+    --text-primary: #0B1220;
+    --text-secondary:#3B4759;
+    --text-muted:   #5A6879;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  /* Keep the chart fills, gradients and status colours. Without this the
+     graphics print as empty outlines. */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #FFFFFF !important;
+  }
+
+  /* Unwind every scroll/height constraint between <body> and the report so the
+     full scroll length reaches the paper. Targets the utility classes the
+     admin layout actually uses. */
+  .h-screen,
+  .overflow-hidden,
+  .overflow-auto,
+  .flex-1 {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Screen-only chrome. The sidebar and top bar are navigation, not report
+     content, and the action buttons would print as dead rectangles.
+     These are marked explicitly with data-print="hide" rather than matched by
+     tag name - the sidebar and top bar are plain divs, so an aside/nav
+     selector silently fails to hide them. */
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  /* The layout's page padding is replaced by the @page margin. */
+  .p-7 {
+    padding: 0 !important;
+  }
+
+  /* A card split across a page break loses its heading or half its chart, so
+     keep each one whole where the page length allows. */
+  section {
+    break-inside: auto;
+  }
+  .rounded-2xl,
+  .rounded-\[14px\],
+  table,
+  svg {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* A section heading stranded at the foot of a page is worse than a slightly
+     shorter page. */
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Wide tables and charts live in horizontal scrollers on screen. On paper
+     there is nothing to scroll, so un-clip them and let the content shrink to
+     the printable width instead of being cut off at the container edge. */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+  .overflow-x-auto > table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  .overflow-x-auto > table td,
+  .overflow-x-auto > table th {
+    word-break: break-word;
+  }
+
+  /* Charts are inline SVG, so they print as vectors rather than a screenshot -
+     text in the axes stays sharp at any zoom. Just keep them inside the
+     printable width. */
+  svg {
+    max-width: 100% !important;
+    height: auto;
+  }
+
+  /* Nothing should animate into a static document, and a spinner frozen
+     mid-rotation reads as a rendering fault. */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Interactive affordances mean nothing on paper. */
+  button {
+    cursor: default !important;
+  }
+
+  /* Show where a link actually pointed, since it cannot be clicked. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 10px;
+    color: #5A6879;
+    word-break: break-all;
+  }
+}

@@ -15,6 +15,7 @@ export default function TopBar() {
 
   return (
     <div
+      data-print="hide"
       className="flex items-center justify-end shrink-0"
       style={{
         height: 56,

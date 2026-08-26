@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Users, Activity, Radio, ShieldCheck,
+  LayoutDashboard, Users, Activity, Radio, ShieldCheck, FileBarChart2,
   Heart, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
@@ -21,6 +21,7 @@ const NAV: NavItem[] = [
   { id: "sessions",  label: "Sessions",  icon: Activity,        href: "/sessions" },
   { id: "devices",   label: "Devices",   icon: Radio,           href: "/devices" },
   { id: "licenses",  label: "Licenses",  icon: ShieldCheck,     href: "/licenses" },
+  { id: "reports",   label: "Reports",   icon: FileBarChart2,   href: "/reports" },
 ];
 
 export default function Sidebar() {
@@ -35,6 +36,7 @@ export default function Sidebar() {
 
   return (
     <div
+      data-print="hide"
       className="flex flex-col transition-all duration-[250ms] overflow-hidden shrink-0"
       style={{
         width: collapsed ? 68 : 220,
@@ -61,7 +63,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div>
             <div className="text-sm font-bold whitespace-nowrap" style={{ color: "var(--text-primary)" }}>
-              ECG Admin
+              Biotex Admin
             </div>
             <div className="text-[10px] whitespace-nowrap" style={{ color: "var(--text-muted)" }}>
               Wellness Platform
