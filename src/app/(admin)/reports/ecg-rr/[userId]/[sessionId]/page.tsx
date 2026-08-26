@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Activity,
   AlertCircle,
+  Clock,
   Droplets,
   HeartPulse,
   Layers,
@@ -100,6 +101,101 @@ function LoadingCard({ message }: { message: string }) {
   );
 }
 
+/**
+ * A recording too short to report on.
+ *
+ * This is a rule being applied, not a failure, so it gets one calm panel for
+ * the whole page rather than the same message repeated across seven sections -
+ * and no "Try again", because retrying cannot lengthen the recording.
+ */
+function TooShortCard({
+  recordingDurationSec,
+  minimumDurationSec,
+  message,
+}: {
+  recordingDurationSec: number | null;
+  minimumDurationSec: number;
+  message: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl text-center"
+      style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-clr)",
+        padding: "48px 28px",
+      }}
+    >
+      <div
+        className="flex items-center justify-center mx-auto"
+        style={{
+          width: 60,
+          height: 60,
+          borderRadius: 16,
+          background: "rgba(148,163,184,0.12)",
+          border: "1px solid rgba(148,163,184,0.30)",
+        }}
+      >
+        <Clock size={26} style={{ color: "#94A3B8" }} />
+      </div>
+      <p className="text-[17px] font-bold mt-4" style={{ color: "var(--text-primary)" }}>
+        Reports not generated
+      </p>
+      <p
+        className="text-[13px] mt-2 mx-auto leading-relaxed"
+        style={{ color: "var(--text-secondary)", maxWidth: 420 }}
+      >
+        {message}
+      </p>
+      <div className="flex items-stretch justify-center gap-3 mt-6 flex-wrap">
+        <div
+          className="rounded-[12px]"
+          style={{
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-clr)",
+            padding: "12px 20px",
+            minWidth: 140,
+          }}
+        >
+          <div className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            This recording
+          </div>
+          <div className="text-[20px] font-bold mt-1" style={{ color: "var(--text-primary)" }}>
+            {formatSpan(recordingDurationSec)}
+          </div>
+        </div>
+        <div
+          className="rounded-[12px]"
+          style={{
+            background: "var(--bg-input)",
+            border: "1px solid var(--border-clr)",
+            padding: "12px 20px",
+            minWidth: 140,
+          }}
+        >
+          <div className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            Minimum needed
+          </div>
+          <div className="text-[20px] font-bold mt-1" style={{ color: "#06B6D4" }}>
+            {formatSpan(minimumDurationSec)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Seconds as "5m", "2m 30s" or "45s". */
+function formatSpan(sec: number | null): string {
+  if (sec === null || sec === undefined) return "—";
+  const whole = Math.max(0, Math.round(sec));
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  if (m === 0) return `${s}s`;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
+}
+
 function ErrorCard({
   title,
   message,
@@ -189,6 +285,13 @@ export default function SessionReportPage() {
     .filter(Boolean)
     .join(" - ");
 
+  // Every report endpoint returns the same too_short body for a recording below
+  // the minimum length, so whichever response arrived first tells us the rule
+  // applied. One panel then replaces all seven sections.
+  const tooShort =
+    [ecgRr.data, hrv.data, rhythm.data, respiration.data, spo2.data, temperature.data, combined.data]
+      .find((d) => d && (d as { reportStatus?: string }).reportStatus === "too_short") ?? null;
+
   const refreshAll = () => {
     ecgRr.mutate();
     hrv.mutate();
@@ -237,15 +340,33 @@ export default function SessionReportPage() {
             </Btn>
             {/* Hands the page to the browser's own PDF writer. The charts are
                 inline SVG, so they land in the PDF as vectors rather than a
-                screenshot - sharp at any zoom, and no extra dependency. */}
-            <Btn onClick={() => printPage(pdfName)}>
-              <Download size={14} />
-              Download PDF
-            </Btn>
+                screenshot - sharp at any zoom, and no extra dependency.
+                Offered only when there is a report to download. */}
+            {!tooShort && (
+              <Btn onClick={() => printPage(pdfName)}>
+                <Download size={14} />
+                Download PDF
+              </Btn>
+            )}
           </div>
         )}
       </div>
 
+      {tooShort ? (
+        <TooShortCard
+          recordingDurationSec={
+            (tooShort as { recordingDurationSec?: number | null }).recordingDurationSec ?? null
+          }
+          minimumDurationSec={
+            (tooShort as { minimumDurationSec?: number }).minimumDurationSec ?? 300
+          }
+          message={
+            (tooShort as { message?: string }).message ??
+            "This recording is too short for reports to be generated."
+          }
+        />
+      ) : (
+        <>
       {/* ── ECG / RR Analysis ────────────────────────────────────── */}
       <section>
         <SectionHeading
@@ -445,6 +566,8 @@ export default function SessionReportPage() {
           />
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

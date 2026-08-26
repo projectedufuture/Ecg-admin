@@ -196,7 +196,42 @@ export interface EcgRrSeriesPoint {
   hr: number;
 }
 
+/**
+ * Report generation state of a whole session, carried by every report response.
+ *
+ *   too_short - the recording was below the minimum length, so NOTHING was
+ *               generated. This is a rule, not a failure.
+ */
+export type ReportStatus =
+  | "not_started"
+  | "pending"
+  | "generating"
+  | "ready"
+  | "failed"
+  | "too_short";
+
+/** The body every report endpoint returns for a recording that is too short. */
+export interface TooShortReport {
+  sessionId: string;
+  sessionName: string | null;
+  userId: string;
+  userName: string;
+  deviceId: string;
+  startTime: string;
+  endTime: string;
+  reportStatus: "too_short";
+  available: false;
+  unavailableReason: "session_too_short";
+  recordingDurationSec: number | null;
+  minimumDurationSec: number;
+  message: string;
+}
+
 export interface EcgRrReport {
+  reportStatus?: ReportStatus;
+  reportGeneratedAt?: string | null;
+  reportError?: string | null;
+  minimumDurationSec?: number;
   sessionId: string;
   sessionName: string | null;
   userId: string;
