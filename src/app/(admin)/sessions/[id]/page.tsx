@@ -4,7 +4,13 @@ import { useState, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Download, Info, AlertCircle, RefreshCw, Droplets } from "lucide-react";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
-import ECGWaveform from "@/components/ui/ECGWaveform";
+import EcgMonitorChart, {
+  chartSpeedLabel,
+  sampleRateLabel,
+  NOMINAL_GAIN_LABEL,
+  type EcgQuality,
+  type EcgPqrst,
+} from "@/components/ui/EcgMonitorChart";
 import MiniChart from "@/components/ui/MiniChart";
 import Btn from "@/components/ui/Btn";
 import { useSessionDetail } from "@/lib/hooks";
@@ -20,14 +26,69 @@ export default function SessionDetailPage() {
 
   const session = data as Record<string, unknown> | undefined;
 
-  // Real ECG samples from stored readings (empty => flat line / no-data state).
-  const ecgData = useMemo(() => {
-    if (!session) return [];
+  /**
+   * The recording's real ECG samples, plus the metadata the chart needs.
+   *
+   * POLARITY: every sample is negated, exactly as the phone does. The MAX30003
+   * outputs inverted, so the device's stored value has R peaks pointing DOWN;
+   * negating puts them up. The backend deliberately stores the device value
+   * untouched and leaves this transform to the renderer, so negating here is
+   * what makes the admin trace the same shape as the one on the phone -
+   * skipping it would show every complex upside down.
+   */
+  const ecg = useMemo(() => {
+    const empty = {
+      samples: [] as number[],
+      sampleRateHz: null as number | null,
+      leadOn: true,
+      quality: "unknown" as EcgQuality,
+      pqrst: null as EcgPqrst | null,
+      totalSamples: 0,
+      windowed: false,
+      windowStartIndex: 0,
+    };
+    if (!session) return empty;
+
+    const block = session.ecg as
+      | {
+          samples?: number[];
+          sampleRateHz?: number | null;
+          leadOn?: boolean;
+          quality?: EcgQuality;
+          pqrst?: EcgPqrst | null;
+          totalSamples?: number;
+          windowed?: boolean;
+          windowStartIndex?: number;
+        }
+      | undefined;
+
+    // Preferred source: the backend's ECG block, which carries the device's
+    // declared rate and contact flags alongside the samples.
+    if (block && Array.isArray(block.samples) && block.samples.length > 0) {
+      return {
+        samples: block.samples.map((v) => -v),
+        sampleRateHz: block.sampleRateHz ?? null,
+        leadOn: block.leadOn ?? true,
+        quality: block.quality ?? "unknown",
+        pqrst: block.pqrst ?? null,
+        totalSamples: block.totalSamples ?? block.samples.length,
+        windowed: block.windowed ?? false,
+        windowStartIndex: block.windowStartIndex ?? 0,
+      };
+    }
+
+    // Fallback for sessions recorded before the ECG block existed. The samples
+    // are real, but no rate was stored - so sampleRateHz stays null and the
+    // chart declines to claim a calibrated time base rather than guessing one.
     const readings = session.readings as { ecgValue: number }[] | undefined;
     const ecgValues = session.ecgValues as number[] | undefined;
-    if (ecgValues && ecgValues.length > 0) return ecgValues;
-    if (readings && readings.length > 0) return readings.map(r => r.ecgValue);
-    return [];
+    const raw =
+      ecgValues && ecgValues.length > 0
+        ? ecgValues
+        : readings && readings.length > 0
+          ? readings.map((r) => r.ecgValue)
+          : [];
+    return { ...empty, samples: raw.map((v) => -v), totalSamples: raw.length };
   }, [session]);
 
   // Real temperature series from stored readings only (downsampled for the chart).
@@ -123,7 +184,35 @@ export default function SessionDetailPage() {
             <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
           </div>
         </div>
-        <ECGWaveform data={ecgData} bpm={session.avgHR as number} height={220} zoom={zoomLevel} />
+        <EcgMonitorChart
+          samples={ecg.samples}
+          sampleRateHz={ecg.sampleRateHz}
+          pqrst={ecg.pqrst}
+          leadOn={ecg.leadOn}
+          quality={ecg.quality}
+          height={220}
+          zoom={zoomLevel}
+        />
+        {/* Scale metadata, worded as the app words it: the chart speed and the
+            device's rate are only claimed when the device actually reported
+            them, and the gain is flagged as nominal because these are
+            uncalibrated ADC counts. */}
+        <div
+          className="flex flex-wrap gap-x-4 gap-y-1 mt-[10px] text-[11px]"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <span>{chartSpeedLabel(ecg.sampleRateHz)}</span>
+          <span>{sampleRateLabel(ecg.sampleRateHz)}</span>
+          <span>{NOMINAL_GAIN_LABEL} (nominal display scale)</span>
+          <span>
+            {ecg.totalSamples.toLocaleString()} samples recorded
+            {ecg.windowed
+              ? ` · showing the most recent ${ecg.samples.length.toLocaleString()} at full rate`
+              : ""}
+          </span>
+          {!ecg.leadOn && <span style={{ color: "#FACC15" }}>Lead contact reported off</span>}
+          {ecg.quality === "poor" && <span style={{ color: "#FACC15" }}>Device reported poor signal quality</span>}
+        </div>
         <div className="flex justify-between mt-[10px] text-[11px]" style={{ color: "var(--text-muted)" }}>
           <span>{formatTime(session.startTime as string)}</span>
           <span className="font-semibold" style={{ color: "#06B6D4" }}>Wellness monitoring only — Not for clinical diagnosis</span>
