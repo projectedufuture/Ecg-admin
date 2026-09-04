@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Download, Info, AlertCircle, RefreshCw, Droplets } from "lucide-react";
+import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Play, Pause, Download, Info, AlertCircle, RefreshCw, Droplets } from "lucide-react";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import EcgMonitorChart, {
   chartSpeedLabel,
@@ -11,11 +11,21 @@ import EcgMonitorChart, {
   type EcgQuality,
   type EcgPqrst,
 } from "@/components/ui/EcgMonitorChart";
+import EcgSweepChart from "@/components/ui/EcgSweepChart";
 import MiniChart from "@/components/ui/MiniChart";
 import Btn from "@/components/ui/Btn";
 import { useSessionDetail } from "@/lib/hooks";
 import { downloadExport } from "@/lib/api";
 import { formatTime, formatDuration } from "@/lib/utils";
+
+/** Seconds -> "M:SS", for the playback timer. */
+function formatMMSS(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds)) return "0:00";
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
 
 export default function SessionDetailPage() {
   const router = useRouter();
@@ -39,6 +49,8 @@ export default function SessionDetailPage() {
   const ecg = useMemo(() => {
     const empty = {
       samples: [] as number[],
+      full: [] as number[],
+      offsetsSec: [] as number[],
       sampleRateHz: null as number | null,
       leadOn: true,
       quality: "unknown" as EcgQuality,
@@ -62,16 +74,61 @@ export default function SessionDetailPage() {
         }
       | undefined;
 
-    // Preferred source: the backend's ECG block, which carries the device's
-    // declared rate and contact flags alongside the samples.
+    /**
+     * The FULL, unwindowed series - every ECG sample recorded for the session,
+     * in storage order. This is what playback scrubs through: the backend's
+     * `ecg.samples` block only covers the most recent 60s, which would cut a
+     * replay of an older recording off before it started.
+     */
+    const readings = session.readings as
+      | { ecgValue: number; timestamp?: string }[]
+      | undefined;
+    const ecgValues = session.ecgValues as number[] | undefined;
+    const rawFull =
+      ecgValues && ecgValues.length > 0
+        ? ecgValues
+        : readings && readings.length > 0
+          ? readings.map((r) => r.ecgValue)
+          : [];
+    const full = rawFull.map((v) => -v);
+
+    /**
+     * Each sample's REAL elapsed-time offset from session start, in seconds.
+     *
+     * This is what lets playback be paced against the recording's actual
+     * wall-clock duration rather than against however many samples happen to
+     * exist: a session can legitimately have long stretches with no ECG data
+     * at all (lead-off, a dropped batch), and assuming a constant rate across
+     * those gaps would make the timeline lie about how long the recording
+     * really took.
+     *
+     * `readings` and `ecgValues`/`full` come from the same backend query in
+     * the same order, so they line up 1:1. If timestamps are ever missing
+     * (older data), fall back to a constant-rate estimate for just those
+     * samples rather than losing the whole recording.
+     */
+    const startMs = Date.parse((session.startTime as string) || "");
+    const fallbackRate = block?.sampleRateHz && block.sampleRateHz > 0 ? block.sampleRateHz : 128;
+    const offsetsSec =
+      readings && readings.length === full.length && Number.isFinite(startMs)
+        ? readings.map((r, i) => {
+            const t = Date.parse(r.timestamp || "");
+            return Number.isFinite(t) ? Math.max(0, (t - startMs) / 1000) : i / fallbackRate;
+          })
+        : full.map((_, i) => i / fallbackRate);
+
+    // Preferred source for the static (non-playback) metadata: the backend's
+    // ECG block, which carries the device's declared rate and contact flags.
     if (block && Array.isArray(block.samples) && block.samples.length > 0) {
       return {
         samples: block.samples.map((v) => -v),
+        full,
+        offsetsSec,
         sampleRateHz: block.sampleRateHz ?? null,
         leadOn: block.leadOn ?? true,
         quality: block.quality ?? "unknown",
         pqrst: block.pqrst ?? null,
-        totalSamples: block.totalSamples ?? block.samples.length,
+        totalSamples: block.totalSamples ?? full.length,
         windowed: block.windowed ?? false,
         windowStartIndex: block.windowStartIndex ?? 0,
       };
@@ -79,17 +136,138 @@ export default function SessionDetailPage() {
 
     // Fallback for sessions recorded before the ECG block existed. The samples
     // are real, but no rate was stored - so sampleRateHz stays null and the
-    // chart declines to claim a calibrated time base rather than guessing one.
-    const readings = session.readings as { ecgValue: number }[] | undefined;
-    const ecgValues = session.ecgValues as number[] | undefined;
-    const raw =
-      ecgValues && ecgValues.length > 0
-        ? ecgValues
-        : readings && readings.length > 0
-          ? readings.map((r) => r.ecgValue)
-          : [];
-    return { ...empty, samples: raw.map((v) => -v), totalSamples: raw.length };
+    // chart declines to claim a calibrated sample-rate label (playback itself
+    // still works, since it is now paced by real timestamps, not by rate).
+    return { ...empty, samples: full, full, offsetsSec, totalSamples: full.length };
   }, [session]);
+
+  // The recording's real elapsed duration, from its own start/end timestamps -
+  // this is what playback is paced against, NOT how many samples exist. A
+  // session can legitimately hold long real gaps (lead-off, dropped frames),
+  // so pacing by sample count would make a sparse recording finish in far
+  // less time than it actually took and would say nothing true about speed.
+  const totalSamples = ecg.full.length;
+  const sessionDurationSec = session
+    ? Math.max(
+        0,
+        (Date.parse((session.endTime as string) || "") - Date.parse((session.startTime as string) || "")) / 1000
+      )
+    : 0;
+  const lastSampleOffsetSec = totalSamples > 0 ? ecg.offsetsSec[totalSamples - 1] : 0;
+  // The larger of the two: the session's recorded wall-clock span, or the
+  // span the samples themselves cover (in case a sample's timestamp ever
+  // lands fractionally after the stored endTime). Floored above zero so
+  // division by it is always safe.
+  const effectiveDurationSec = Math.max(sessionDurationSec, lastSampleOffsetSec, 0.001);
+
+  /**
+   * Playback of the stored waveform: starts automatically when the session
+   * opens, advances at real wall-clock speed against the recording's real
+   * duration, loops rather than stopping at the end (a monitor display keeps
+   * moving), and can be paused/resumed.
+   */
+  const canPlay = totalSamples > 1 && effectiveDurationSec > 0;
+
+  const [playing, setPlaying] = useState(true);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const lastFrameRef = useRef<number | null>(null);
+
+  // A different session was opened: start its playback from the beginning.
+  useEffect(() => {
+    setElapsedSec(0);
+    setPlaying(true);
+    lastFrameRef.current = null;
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!playing || !canPlay) return;
+    let raf = 0;
+    const tick = (now: number) => {
+      if (lastFrameRef.current === null) lastFrameRef.current = now;
+      const deltaSec = (now - lastFrameRef.current) / 1000;
+      // Throttled to ~15 updates/sec: a long recording does not need
+      // re-scanning on every display refresh to look like a smooth sweep.
+      // Capped at 250ms so a backgrounded tab resuming does not jump the
+      // trace forward by however long it was hidden.
+      if (deltaSec >= 0.066) {
+        lastFrameRef.current = now;
+        const cappedDeltaSec = Math.min(deltaSec, 0.25);
+        setElapsedSec((e) => Math.min(effectiveDurationSec, e + cappedDeltaSec));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      lastFrameRef.current = null;
+    };
+  }, [playing, canPlay, effectiveDurationSec]);
+
+  // Reaching the end freezes the display on the final frame rather than
+  // looping - Play then starts the recording over from the beginning.
+  const playbackDone = canPlay && elapsedSec >= effectiveDurationSec;
+  useEffect(() => {
+    if (playbackDone && playing) setPlaying(false);
+  }, [playbackDone, playing]);
+
+  const togglePlayback = () => {
+    if (!canPlay) return;
+    if (playbackDone) setElapsedSec(0);
+    setPlaying((p) => !p);
+  };
+
+  // Width of the visible strip: how much of the recording is on screen at
+  // once as it scrolls.
+  const PLAYBACK_WINDOW_SEC = 6;
+
+  /**
+   * Heart rate and temperature AT THE CURRENT PLAYHEAD, updating as playback
+   * advances - like the numeric readouts next to a real monitor's trace.
+   *
+   * HR and temperature are recorded once per FRAME, not once per ECG sample:
+   * a batched frame's vitals sit on its first sample only, and every other
+   * sample in that frame carries the schema's 0 = "not reported" sentinel.
+   * Forward-filling those sentinels with the last real reading is what a
+   * monitor's own numeric display does too - it holds the last computed value
+   * until a new one arrives, rather than blanking between updates.
+   */
+  const vitalsAtSample = useMemo(() => {
+    if (!session) return { hr: [] as number[], temp: [] as number[] };
+    const readings = session.readings as
+      | { hr?: number; temperatureCelsius?: number }[]
+      | undefined;
+    if (!readings || readings.length === 0) return { hr: [], temp: [] };
+    const hr = new Array<number>(readings.length);
+    const temp = new Array<number>(readings.length);
+    let lastHr = 0;
+    let lastTemp = 0;
+    for (let i = 0; i < readings.length; i += 1) {
+      const h = readings[i].hr ?? 0;
+      const t = readings[i].temperatureCelsius ?? 0;
+      if (h > 0) lastHr = h;
+      if (t > 0) lastTemp = t;
+      hr[i] = lastHr;
+      temp[i] = lastTemp;
+    }
+    return { hr, temp };
+  }, [session]);
+
+  // The most recent reading AT OR BEFORE the current playhead time - located
+  // by binary search, since offsetsSec is non-decreasing.
+  const cursorIndex = (() => {
+    const offs = ecg.offsetsSec;
+    if (!offs.length) return 0;
+    let lo = 0;
+    let hi = offs.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (offs[mid] <= elapsedSec) lo = mid + 1;
+      else hi = mid;
+    }
+    return Math.max(0, Math.min(lo - 1, vitalsAtSample.hr.length - 1));
+  })();
+  const currentHr = vitalsAtSample.hr[cursorIndex] ?? 0;
+  const currentTemp = vitalsAtSample.temp[cursorIndex] ?? 0;
 
   // Real temperature series from stored readings only (downsampled for the chart).
   const tempData = useMemo(() => {
@@ -176,38 +354,90 @@ export default function SessionDetailPage() {
         ))}
       </div>
       <div className="rounded-2xl p-6 mb-5" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <h3 className="text-base font-semibold m-0" style={{ color: "var(--text-primary)" }}>ECG Waveform</h3>
-          <div className="flex gap-2">
-            <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.max(0.25, z - 0.5))} disabled={zoomLevel <= 0.25}><Minus size={12} />Zoom Out</Btn>
-            <span className="flex items-center px-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{zoomLevel.toFixed(1)}x</span>
-            <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
+          <div className="flex items-center gap-4 flex-wrap">
+            {canPlay ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Btn
+                    variant="ghost"
+                    style={{ padding: "6px 12px", fontSize: 12 }}
+                    onClick={togglePlayback}
+                  >
+                    {playing ? <Pause size={12} /> : <Play size={12} />}
+                    {playing ? "Pause" : playbackDone ? "Replay" : "Play"}
+                  </Btn>
+                  <span
+                    className="text-xs font-semibold tabular-nums"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    {formatMMSS(elapsedSec)} / {formatMMSS(effectiveDurationSec)}
+                  </span>
+                </div>
+                {/* Live readout at the playhead - like the numbers beside a
+                    bedside monitor's trace, updating as playback advances. */}
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#F43F5E" }}>
+                    <Heart size={12} />
+                    {currentHr > 0 ? `${currentHr} bpm` : "— bpm"}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#F59E0B" }}>
+                    <Thermometer size={12} />
+                    {currentTemp > 0 ? `${currentTemp.toFixed(1)}°C` : "—°C"}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex gap-2">
+                <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.max(0.25, z - 0.5))} disabled={zoomLevel <= 0.25}><Minus size={12} />Zoom Out</Btn>
+                <span className="flex items-center px-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{zoomLevel.toFixed(1)}x</span>
+                <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
+              </div>
+            )}
           </div>
         </div>
-        <EcgMonitorChart
-          samples={ecg.samples}
-          sampleRateHz={ecg.sampleRateHz}
-          pqrst={ecg.pqrst}
-          leadOn={ecg.leadOn}
-          quality={ecg.quality}
-          height={220}
-          zoom={zoomLevel}
-        />
-        {/* Scale metadata, worded as the app words it: the chart speed and the
-            device's rate are only claimed when the device actually reported
-            them, and the gain is flagged as nominal because these are
-            uncalibrated ADC counts. */}
+        {canPlay ? (
+          <EcgSweepChart
+            samples={ecg.full}
+            offsetsSec={ecg.offsetsSec}
+            elapsedSec={elapsedSec}
+            windowSec={PLAYBACK_WINDOW_SEC}
+            sampleRateHz={ecg.sampleRateHz}
+            leadOn={ecg.leadOn}
+            quality={ecg.quality}
+            height={220}
+          />
+        ) : (
+          <EcgMonitorChart
+            samples={ecg.samples}
+            sampleRateHz={ecg.sampleRateHz}
+            pqrst={null}
+            leadOn={ecg.leadOn}
+            quality={ecg.quality}
+            height={220}
+            zoom={zoomLevel}
+          />
+        )}
+        {/* Scale metadata, worded as the app words it: the chart speed and
+            the device's rate are only claimed when the device actually
+            reported them, and the gain is auto-scaled to the real signal
+            (median-centred) rather than a fixed mV calibration. */}
         <div
           className="flex flex-wrap gap-x-4 gap-y-1 mt-[10px] text-[11px]"
           style={{ color: "var(--text-muted)" }}
         >
           <span>{chartSpeedLabel(ecg.sampleRateHz)}</span>
           <span>{sampleRateLabel(ecg.sampleRateHz)}</span>
-          <span>{NOMINAL_GAIN_LABEL} (nominal display scale)</span>
+          <span>Auto-scaled to the real signal (uncalibrated)</span>
           <span>
             {ecg.totalSamples.toLocaleString()} samples recorded
-            {ecg.windowed
-              ? ` · showing the most recent ${ecg.samples.length.toLocaleString()} at full rate`
+            {canPlay
+              ? playbackDone
+                ? ` · playback complete (${PLAYBACK_WINDOW_SEC}s window)`
+                : playing
+                  ? ` · sweeping at real time (${PLAYBACK_WINDOW_SEC}s window)`
+                  : " · paused"
               : ""}
           </span>
           {!ecg.leadOn && <span style={{ color: "#FACC15" }}>Lead contact reported off</span>}
