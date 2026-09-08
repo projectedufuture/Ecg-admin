@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Play, Pause, Download, Info, AlertCircle, RefreshCw, Droplets } from "lucide-react";
+import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Play, Pause, Download, Info, AlertCircle, RefreshCw, Droplets, Waves } from "lucide-react";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import EcgMonitorChart, {
   chartSpeedLabel,
@@ -221,35 +221,57 @@ export default function SessionDetailPage() {
   const PLAYBACK_WINDOW_SEC = 6;
 
   /**
-   * Heart rate and temperature AT THE CURRENT PLAYHEAD, updating as playback
-   * advances - like the numeric readouts next to a real monitor's trace.
+   * Heart rate, temperature, SpO2, PR interval and RR interval AT THE CURRENT
+   * PLAYHEAD, updating as playback advances - like the numeric readouts next
+   * to a real monitor's trace.
    *
-   * HR and temperature are recorded once per FRAME, not once per ECG sample:
-   * a batched frame's vitals sit on its first sample only, and every other
-   * sample in that frame carries the schema's 0 = "not reported" sentinel.
+   * All five are recorded once per FRAME, not once per ECG sample: a batched
+   * frame's vitals sit on its first sample only, and every other sample in
+   * that frame carries the schema's 0/null = "not reported" sentinel.
    * Forward-filling those sentinels with the last real reading is what a
    * monitor's own numeric display does too - it holds the last computed value
    * until a new one arrives, rather than blanking between updates.
+   *
+   * PR and RR come from the device's own per-reading fields (`pqrst.prMs`,
+   * `rrIntervalMs`) - sparser than hr/temp/spo2 since they only land on the
+   * sample the device actually reported them on, but forward-filled the same
+   * way so the readout still holds a value between beats.
    */
   const vitalsAtSample = useMemo(() => {
-    if (!session) return { hr: [] as number[], temp: [] as number[] };
+    const empty = { hr: [] as number[], temp: [] as number[], spo2: [] as number[], pr: [] as number[], rr: [] as number[] };
+    if (!session) return empty;
     const readings = session.readings as
-      | { hr?: number; temperatureCelsius?: number }[]
+      | { hr?: number; temperatureCelsius?: number; spo2?: number; prMs?: number | null; rrIntervalMs?: number | null }[]
       | undefined;
-    if (!readings || readings.length === 0) return { hr: [], temp: [] };
+    if (!readings || readings.length === 0) return empty;
     const hr = new Array<number>(readings.length);
     const temp = new Array<number>(readings.length);
+    const spo2 = new Array<number>(readings.length);
+    const pr = new Array<number>(readings.length);
+    const rr = new Array<number>(readings.length);
     let lastHr = 0;
     let lastTemp = 0;
+    let lastSpo2 = 0;
+    let lastPr = 0;
+    let lastRr = 0;
     for (let i = 0; i < readings.length; i += 1) {
       const h = readings[i].hr ?? 0;
       const t = readings[i].temperatureCelsius ?? 0;
+      const s = readings[i].spo2 ?? 0;
+      const p = readings[i].prMs;
+      const r = readings[i].rrIntervalMs;
       if (h > 0) lastHr = h;
       if (t > 0) lastTemp = t;
+      if (s > 0) lastSpo2 = s;
+      if (typeof p === "number" && p > 0) lastPr = p;
+      if (typeof r === "number" && r > 0) lastRr = r;
       hr[i] = lastHr;
       temp[i] = lastTemp;
+      spo2[i] = lastSpo2;
+      pr[i] = lastPr;
+      rr[i] = lastRr;
     }
-    return { hr, temp };
+    return { hr, temp, spo2, pr, rr };
   }, [session]);
 
   // The most recent reading AT OR BEFORE the current playhead time - located
@@ -268,6 +290,9 @@ export default function SessionDetailPage() {
   })();
   const currentHr = vitalsAtSample.hr[cursorIndex] ?? 0;
   const currentTemp = vitalsAtSample.temp[cursorIndex] ?? 0;
+  const currentSpo2 = vitalsAtSample.spo2[cursorIndex] ?? 0;
+  const currentPr = vitalsAtSample.pr[cursorIndex] ?? 0;
+  const currentRr = vitalsAtSample.rr[cursorIndex] ?? 0;
 
   // Real temperature series from stored readings only (downsampled for the chart).
   const tempData = useMemo(() => {
@@ -382,9 +407,21 @@ export default function SessionDetailPage() {
                     <Heart size={12} />
                     {currentHr > 0 ? `${currentHr} bpm` : "— bpm"}
                   </span>
+                  <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#ff5fa2" }}>
+                    <Droplets size={12} />
+                    {currentSpo2 > 0 ? `${currentSpo2}%` : "—%"}
+                  </span>
                   <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#F59E0B" }}>
                     <Thermometer size={12} />
                     {currentTemp > 0 ? `${currentTemp.toFixed(1)}°C` : "—°C"}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#A78BFA" }}>
+                    <Activity size={12} />
+                    {currentPr > 0 ? `PR ${Math.round(currentPr)}ms` : "PR —ms"}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#38BDF8" }}>
+                    <Waves size={12} />
+                    {currentRr > 0 ? `RR ${Math.round(currentRr)}ms` : "RR —ms"}
                   </span>
                 </div>
               </>
