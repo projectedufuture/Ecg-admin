@@ -24,9 +24,12 @@ import { usePrintMode } from "@/lib/printMode";
 /**
  * Renders one session's respiration estimate.
  *
- * Both estimator blocks are always shown — each carrying either a rate or the
- * reason it is missing — so a gap is explained rather than left blank. The
- * headline rate is withheld entirely when the two estimators disagree.
+ * ECG-DERIVED ONLY. The PPG estimator is deliberately not rendered: this
+ * device streams no raw IR/RED waveform, so that block could only ever say
+ * "unavailable", and the SpO2 percentage carries no waveform to substitute for
+ * it. The cross-check between the two estimators goes with it - there is only
+ * one estimator to check. The ECG block still carries either a rate or the
+ * exact reason it has none, so a gap is explained rather than left blank.
  */
 
 const CONFIDENCE_COLOR: Record<RespirationConfidence, string> = {
@@ -214,7 +217,7 @@ function UnavailableState({ report }: { report: RespirationReportData }) {
         </p>
       </div>
 
-      {/* Both estimators are still shown, so the gap is explained. */}
+      {/* The ECG estimator is still shown, so the gap is explained. */}
       <div
         className="grid gap-4"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
@@ -224,12 +227,6 @@ function UnavailableState({ report }: { report: RespirationReportData }) {
           icon={Activity}
           color="#06B6D4"
           estimate={report.ecgEstimate}
-        />
-        <EstimateCard
-          title="PPG-derived"
-          icon={Gauge}
-          color="#10B981"
-          estimate={report.ppgEstimate}
         />
       </div>
     </div>
@@ -245,7 +242,7 @@ export default function RespirationReport({ report }: { report: RespirationRepor
   const printing = usePrintMode();
   const technicalExpanded = technicalOpen || printing;
 
-  const { summary, crossCheck, recording } = report;
+  const { summary, recording } = report;
 
   if (report.status !== "success" || summary.respirationRate === null) {
     return <UnavailableState report={report} />;
@@ -257,20 +254,12 @@ export default function RespirationReport({ report }: { report: RespirationRepor
   const technicalRows: Array<[string, string]> = [
     ["Respiration rate", `${num(summary.respirationRate, 1)} breaths/min`],
     ["Confidence", summary.confidence],
-    [
-      "Derived from",
-      summary.basis === "ecg_and_ppg"
-        ? "ECG and PPG"
-        : summary.basis === "ecg_only"
-          ? "ECG only"
-          : "PPG only",
-    ],
+    ["Derived from", "ECG (respiratory sinus arrhythmia)"],
     ["ECG-derived rate", report.ecgEstimate.available ? `${num(report.ecgEstimate.rate, 1)} breaths/min` : "—"],
     ["ECG peak frequency", report.ecgEstimate.available ? `${num(report.ecgEstimate.freqHz, 3)} Hz` : "—"],
     ["ECG peak prominence", report.ecgEstimate.available ? `${num(report.ecgEstimate.prominence, 1)}×` : "—"],
-    ["PPG-derived rate", report.ppgEstimate.available ? `${num(report.ppgEstimate.rate, 1)} breaths/min` : "—"],
-    ["Cross-check", crossCheck.status ?? "—"],
-    ["Estimate difference", crossCheck.difference !== null ? `${num(crossCheck.difference, 1)} breaths/min` : "—"],
+    ["Signal quality", report.ecgEstimate.quality],
+    ["NN intervals used", report.ecgEstimate.intervalsUsed != null ? String(report.ecgEstimate.intervalsUsed) : "—"],
     ["Recording duration", formatDuration(recording.durationSec)],
     ["Analysed duration", formatDuration(recording.analysedDurationSec)],
     ["Spectral resolution", `${num(recording.spectralResolutionBpm, 2)} breaths/min`],
@@ -297,7 +286,7 @@ export default function RespirationReport({ report }: { report: RespirationRepor
           icon={Gauge}
           label="Confidence"
           value={summary.confidence}
-          sub={crossCheck.status ?? ""}
+          sub={report.ecgEstimate.available ? `${report.ecgEstimate.quality} signal` : ""}
           color={CONFIDENCE_COLOR[summary.confidence]}
         />
         <MetricCard
@@ -307,16 +296,9 @@ export default function RespirationReport({ report }: { report: RespirationRepor
           sub={report.ecgEstimate.available ? "breaths/min" : "unavailable"}
           color="#10B981"
         />
-        <MetricCard
-          icon={LineChart}
-          label="PPG-derived"
-          value={report.ppgEstimate.available ? `${num(report.ppgEstimate.rate, 1)}` : "—"}
-          sub={report.ppgEstimate.available ? "breaths/min" : "unavailable"}
-          color="#8B5CF6"
-        />
       </div>
 
-      {/* ── Estimators + cross-check ─────────────────────────────── */}
+      {/* ── Estimator ────────────────────────────────────────────── */}
       <div
         className="grid gap-4"
         style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}
@@ -327,25 +309,14 @@ export default function RespirationReport({ report }: { report: RespirationRepor
           color="#10B981"
           estimate={report.ecgEstimate}
         />
-        <EstimateCard
-          title="PPG-derived"
-          icon={Gauge}
-          color="#8B5CF6"
-          estimate={report.ppgEstimate}
-        />
       </div>
 
-      <Card title="Cross-check & Recording" icon={Gauge} color="#06B6D4">
+      <Card title="Recording" icon={Gauge} color="#06B6D4">
         <div
           className="grid gap-5"
           style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}
         >
-          <Stat label="Cross-check" value={crossCheck.status ?? "—"} />
-          <Stat
-            label="Difference"
-            value={crossCheck.difference !== null ? num(crossCheck.difference, 1) : "—"}
-            unit={crossCheck.difference !== null ? "br/min" : undefined}
-          />
+          <Stat label="Duration" value={formatDuration(recording.durationSec)} />
           <Stat label="Analysed" value={formatDuration(recording.analysedDurationSec)} />
           <Stat label="Resolution" value={num(recording.spectralResolutionBpm, 2)} unit="br/min" />
           <Stat label="Artifact" value={num(recording.artifactPercentage, 1)} unit="%" />
