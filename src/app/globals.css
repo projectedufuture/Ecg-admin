@@ -21,17 +21,18 @@
 }
 
 [data-theme="light"] {
-  --bg-page:      #F0F4F8;
-  --bg-surface:   #FFFFFF;
-  --bg-elevated:  #F8FAFC;
-  --bg-input:     #EFF2F7;
-  --border-clr:   #CBD5E1;
-  --text-primary: #0F172A;
-  --text-secondary:#475569;
-  --text-muted:   #94A3B8;
-  --hover-bg:     #E2E8F0;
-  --scrollbar-thumb: #CBD5E1;
-  --scrollbar-hover: #94A3B8;
+  /* Creamy light theme — warm off-white surfaces, soft tan borders */
+  --bg-page:      #F3EEE4;
+  --bg-surface:   #FFFDF8;
+  --bg-elevated:  #FBF7EF;
+  --bg-input:     #F1EBDF;
+  --border-clr:   #E5DECE;
+  --text-primary: #2B2721;
+  --text-secondary:#6E6657;
+  --text-muted:   #A49B89;
+  --hover-bg:     #EDE6D8;
+  --scrollbar-thumb: #DED5C3;
+  --scrollbar-hover: #C4B9A2;
 }
 
 /* ── Base ─────────────────────────────────────────── */
@@ -78,6 +79,24 @@ html, body {
 
 .animate-spin-slow {
   animation: spin 1s linear infinite;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise {
+  animation: fadeInUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes growBar {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 /* ── Print / PDF ───────────────────────────────────

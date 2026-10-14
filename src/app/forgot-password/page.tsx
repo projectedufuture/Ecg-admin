@@ -8,7 +8,7 @@ import Btn from "@/components/ui/Btn";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  "https://api.biotexindia.com";
+  "https://api.biotexindia.com/api";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");

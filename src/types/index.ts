@@ -64,6 +64,10 @@ export interface Session {
   duration: number;
   dataPoints: number;
   dataSource: "live" | "stored" | "mixed";
+  activityType?: "ecg" | "walking" | "running" | "cycling" | "hiking" | "training" | "recovery_walk" | "interval_run" | "other";
+  reportStatus?: "not_started" | "pending" | "generating" | "ready" | "failed" | "too_short";
+  distanceMeters?: number;
+  calories?: number;
   avgTemp: string;
   avgHR: number;
   minHR: number;

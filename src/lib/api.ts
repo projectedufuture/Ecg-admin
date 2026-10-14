@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.biotexindia.com";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.biotexindia.com/api";
 
 let accessToken: string | null = null;
 

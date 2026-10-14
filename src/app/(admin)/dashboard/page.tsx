@@ -1,284 +1,249 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Users, FileText, Radio, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, TrendingUp, ArrowUp, ArrowDown } from "lucide-react";
-import MetricCard from "@/components/ui/MetricCard";
-import { useDashboard } from "@/lib/hooks";
+import { useRouter } from "next/navigation";
+import {
+  Users, Smartphone, Activity, Heart, Download, ArrowUp, ArrowDown,
+  Clock, Server, BarChart3, Footprints, Bike, Dumbbell, Mountain, Zap, Circle,
+  AlertCircle, RefreshCw, ChevronDown, ArrowUpRight,
+} from "lucide-react";
+import { useDashboard, useSessions, useDevices } from "@/lib/hooks";
+import { downloadExport } from "@/lib/api";
+import { formatDuration, formatRelativeTime, getInitials } from "@/lib/utils";
 import Btn from "@/components/ui/Btn";
+import { Session, Device } from "@/types";
 
-// ── Utility ──────────────────────────────────────────────────────
-const FALLBACK_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// ── palette ──────────────────────────────────────────────────────
+const C = {
+  cyan: "#06B6D4", blue: "#3B82F6", purple: "#8B5CF6", green: "#10B981",
+  amber: "#F59E0B", pink: "#F43F5E", slate: "#94A3B8",
+};
 
-function niceMax(val: number): number {
-  if (val <= 0) return 5;
-  const mag = Math.pow(10, Math.floor(Math.log10(val)));
-  const norm = val / mag;
-  if (norm <= 1.5) return Math.ceil(norm * 10) / 10 * mag;
-  if (norm <= 3) return Math.ceil(norm) * mag;
-  if (norm <= 7) return Math.ceil(norm) * mag;
-  return 10 * mag;
+// ── small helpers ────────────────────────────────────────────────
+function Sparkbars({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(1, ...data);
+  return (
+    <div className="flex items-end gap-[3px]" style={{ height: 44 }}>
+      {data.map((v, i) => (
+        <div
+          key={i}
+          style={{
+            width: 5,
+            height: `${Math.max(8, (v / max) * 100)}%`,
+            borderRadius: 2,
+            background: color,
+            opacity: 0.35 + 0.65 * (v / max),
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
-// ── Professional chart ───────────────────────────────────────────
-function ChartCard({
-  data, labels, color, title, icon: Icon,
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const W = 120, H = 44;
+  if (data.length < 2) return <div style={{ width: W, height: H }} />;
+  const max = Math.max(...data), min = Math.min(...data);
+  const rng = max - min || 1;
+  const pts = data.map((v, i) => [
+    (i / (data.length - 1)) * W,
+    H - 4 - ((v - min) / rng) * (H - 8),
+  ]);
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const uid = color.replace("#", "");
+  return (
+    <svg width={W} height={H} style={{ display: "block" }}>
+      <defs>
+        <linearGradient id={`sk-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${d} L${W},${H} L0,${H} Z`} fill={`url(#sk-${uid})`} />
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ── stat card ────────────────────────────────────────────────────
+function StatCard({
+  icon: Icon, label, value, unit, trend, trendLabel, color, spark,
 }: {
-  data: number[];
-  labels: string[];
-  color: string;
-  title: string;
-  icon: React.ElementType;
+  icon: React.ElementType; label: string; value: string; unit?: string;
+  trend?: number | null; trendLabel?: string; color: string;
+  spark: { type: "bar" | "line"; data: number[] };
 }) {
-  const [hover, setHover] = useState<number | null>(null);
-
-  const stats = useMemo(() => {
-    const total = data.reduce((a, b) => a + b, 0);
-    const avg = Math.round(total / data.length);
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-    const peakIdx = data.indexOf(max);
-    const lastTwo = data.slice(-2);
-    const mTrend = lastTwo.length === 2 ? Math.round(((lastTwo[1] - lastTwo[0]) / (lastTwo[0] || 1)) * 100) : 0;
-    return { total, avg, max, min, peakIdx, mTrend };
-  }, [data]);
-
-  // Chart dimensions
-  const W = 560, H = 240;
-  const padL = 44, padR = 20, padT = 20, padB = 36;
-  const cW = W - padL - padR;
-  const cH = H - padT - padB;
-
-  const yMax = niceMax(stats.max);
-  const gridSteps = 5;
-
-  const pts = data.map((v, i) => ({
-    x: padL + (i / (data.length - 1)) * cW,
-    y: padT + cH - (v / yMax) * cH,
-    v,
-  }));
-
-  // Catmull-Rom → Bezier smooth path
-  function smooth(points: { x: number; y: number }[]): string {
-    if (points.length < 2) return "";
-    let d = `M ${points[0].x},${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[Math.max(i - 1, 0)];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[Math.min(i + 2, points.length - 1)];
-      const t = 0.32;
-      d += ` C ${p1.x + (p2.x - p0.x) * t},${p1.y + (p2.y - p0.y) * t} ${p2.x - (p3.x - p1.x) * t},${p2.y - (p3.y - p1.y) * t} ${p2.x},${p2.y}`;
-    }
-    return d;
-  }
-
-  const linePath = smooth(pts);
-  const areaPath = `${linePath} L ${pts[pts.length - 1].x},${padT + cH} L ${pts[0].x},${padT + cH} Z`;
-
-  const uid = title.replace(/\s/g, "");
-
+  const up = (trend ?? 0) >= 0;
   return (
     <div
-      className="rounded-2xl overflow-hidden"
+      className="rounded-2xl p-5 flex flex-col"
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}
     >
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between"
-        style={{ padding: "18px 24px 12px" }}
-      >
-        <div className="flex items-center gap-[10px]">
-          <div
-            className="flex items-center justify-center"
-            style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: `${color}18`,
-            }}
-          >
-            <Icon size={17} style={{ color }} />
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold m-0" style={{ color: "var(--text-primary)" }}>
-              {title}
-            </h3>
-            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Monthly overview</span>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-[22px] font-bold leading-none" style={{ color: "var(--text-primary)" }}>
-            {stats.total.toLocaleString()}
-          </div>
-          <div
-            className="text-[11px] font-semibold flex items-center justify-end gap-[2px] mt-[2px]"
-            style={{ color: stats.mTrend >= 0 ? "#10B981" : "#EF4444" }}
-          >
-            {stats.mTrend >= 0 ? <ArrowUp size={10} /> : <ArrowDown size={10} />}
-            {Math.abs(stats.mTrend)}% vs prev month
-          </div>
-        </div>
-      </div>
-
-      {/* ── SVG ────────────────────────────────────────────── */}
-      <div style={{ padding: "0 24px" }}>
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className="w-full"
-          style={{ height: 220, display: "block" }}
-          onMouseLeave={() => setHover(null)}
+      <div className="flex items-start justify-between">
+        <div
+          className="flex items-center justify-center"
+          style={{ width: 46, height: 46, borderRadius: 13, background: `${color}22` }}
         >
-          <defs>
-            {/* Area gradient */}
-            <linearGradient id={`areaG-${uid}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.22" />
-              <stop offset="50%" stopColor={color} stopOpacity="0.08" />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
-            </linearGradient>
-            {/* Line gradient */}
-            <linearGradient id={`lineG-${uid}`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={color} stopOpacity="0.5" />
-              <stop offset="30%" stopColor={color} stopOpacity="1" />
-              <stop offset="70%" stopColor={color} stopOpacity="1" />
-              <stop offset="100%" stopColor={color} stopOpacity="0.5" />
-            </linearGradient>
-            {/* Glow */}
-            <filter id={`glow-${uid}`}>
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            {/* Dot glow */}
-            <radialGradient id={`dotGlow-${uid}`}>
-              <stop offset="0%" stopColor={color} stopOpacity="0.4" />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
-            </radialGradient>
-          </defs>
-
-          {/* Horizontal grid */}
-          {Array.from({ length: gridSteps + 1 }, (_, i) => {
-            const val = (yMax / gridSteps) * i;
-            const y = padT + cH - (val / yMax) * cH;
-            return (
-              <g key={i}>
-                <line
-                  x1={padL} y1={y} x2={W - padR} y2={y}
-                  stroke="var(--border-clr)"
-                  strokeWidth="0.8"
-                  opacity={i === 0 ? 0.6 : 0.35}
-                />
-                <text x={padL - 8} y={y + 3.5} textAnchor="end" fontSize="10" fontWeight="500" fill="var(--text-muted)">
-                  {Math.round(val)}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Area fill */}
-          <path d={areaPath} fill={`url(#areaG-${uid})`} />
-
-          {/* Glow line (behind) */}
-          <path
-            d={linePath} fill="none" stroke={color} strokeWidth="6"
-            strokeLinecap="round" strokeLinejoin="round" opacity="0.15"
-          />
-
-          {/* Main line */}
-          <path
-            d={linePath} fill="none" stroke={`url(#lineG-${uid})`}
-            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* Hover crosshair + tooltip */}
-          {hover !== null && (() => {
-            const p = pts[hover];
-            const tipW = 76, tipH = 44;
-            let tx = p.x - tipW / 2;
-            if (tx < padL) tx = padL;
-            if (tx + tipW > W - padR) tx = W - padR - tipW;
-            const ty = Math.max(4, p.y - tipH - 14);
-            return (
-              <g>
-                {/* Vertical line */}
-                <line x1={p.x} y1={padT} x2={p.x} y2={padT + cH} stroke={color} strokeWidth="1" opacity="0.25" />
-                {/* Horizontal line */}
-                <line x1={padL} y1={p.y} x2={W - padR} y2={p.y} stroke={color} strokeWidth="1" strokeDasharray="3 3" opacity="0.2" />
-                {/* Glow circle */}
-                <circle cx={p.x} cy={p.y} r="16" fill={`url(#dotGlow-${uid})`} />
-                {/* Tooltip card */}
-                <rect x={tx} y={ty} width={tipW} height={tipH} rx="8" fill="var(--bg-elevated)" stroke="var(--border-clr)" strokeWidth="1" />
-                <text x={tx + tipW / 2} y={ty + 16} textAnchor="middle" fontSize="10" fontWeight="500" fill="var(--text-muted)">
-                  {labels[hover]}
-                </text>
-                <text x={tx + tipW / 2} y={ty + 33} textAnchor="middle" fontSize="15" fontWeight="700" fill={color}>
-                  {p.v}
-                </text>
-              </g>
-            );
-          })()}
-
-          {/* Data points */}
-          {pts.map((p, i) => (
-            <g key={i}>
-              <rect
-                x={p.x - cW / data.length / 2} y={padT} width={cW / data.length} height={cH + padB}
-                fill="transparent" onMouseEnter={() => setHover(i)}
-              />
-              {/* Outer ring on hover */}
-              {hover === i && (
-                <circle cx={p.x} cy={p.y} r="7" fill="none" stroke={color} strokeWidth="2" opacity="0.3" />
-              )}
-              {/* Dot */}
-              <circle
-                cx={p.x} cy={p.y}
-                r={hover === i ? 4.5 : i === stats.peakIdx ? 3.5 : 0}
-                fill={hover === i ? color : i === stats.peakIdx ? color : "transparent"}
-                stroke={hover === i || i === stats.peakIdx ? "#fff" : "transparent"}
-                strokeWidth="2"
-                style={{ transition: "all 0.15s ease" }}
-              />
-            </g>
-          ))}
-
-          {/* X-axis labels */}
-          {pts.map((p, i) => (
-            <text
-              key={i} x={p.x} y={H - 8}
-              textAnchor="middle" fontSize="10" fontWeight={hover === i ? 600 : 400}
-              fill={hover === i ? color : "var(--text-muted)"}
-              style={{ transition: "fill 0.15s" }}
-            >
-              {labels[i]}
-            </text>
-          ))}
-        </svg>
+          <Icon size={22} style={{ color }} />
+        </div>
+        <div className="opacity-90">
+          {spark.type === "bar"
+            ? <Sparkbars data={spark.data} color={color} />
+            : <Sparkline data={spark.data} color={color} />}
+        </div>
       </div>
+      <div className="text-[13px] mt-4" style={{ color: "var(--text-secondary)" }}>{label}</div>
+      <div className="flex items-end gap-1 mt-[2px]">
+        <span className="text-[30px] font-bold leading-none" style={{ color: "var(--text-primary)", letterSpacing: -0.5 }}>
+          {value}
+        </span>
+        {unit && <span className="text-[14px] font-medium mb-[2px]" style={{ color: "var(--text-muted)" }}>{unit}</span>}
+      </div>
+      {trend != null && (
+        <div className="flex items-center gap-[5px] mt-2 text-[12px] font-semibold" style={{ color: up ? C.green : C.pink }}>
+          {up ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+          {Math.abs(trend)}%
+          <span className="font-normal" style={{ color: "var(--text-muted)" }}>{trendLabel}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* ── Bottom stats row ──────────────────────────────── */}
-      <div
-        className="grid grid-cols-4"
-        style={{ borderTop: "1px solid var(--border-clr)" }}
-      >
-        {[
-          { label: "Lowest", value: stats.min, sub: labels[data.indexOf(stats.min)] },
-          { label: "Average", value: stats.avg, sub: "per month" },
-          { label: "Highest", value: stats.max, sub: labels[stats.peakIdx] },
-          { label: "Current", value: data[data.length - 1], sub: labels[data.length - 1] },
-        ].map((s, i) => (
-          <div
-            key={i}
-            className="text-center"
-            style={{
-              padding: "14px 0",
-              borderRight: i < 3 ? "1px solid var(--border-clr)" : "none",
-            }}
-          >
-            <div className="text-[10px] uppercase font-semibold tracking-wide" style={{ color: "var(--text-muted)", letterSpacing: 0.6 }}>
-              {s.label}
-            </div>
-            <div className="text-[17px] font-bold mt-[2px]" style={{ color: "var(--text-primary)" }}>
-              {s.value}
-            </div>
-            <div className="text-[10px] mt-[1px]" style={{ color: "var(--text-muted)" }}>
-              {s.sub}
-            </div>
+// ── card shell ───────────────────────────────────────────────────
+function Card({ title, icon: Icon, iconColor, action, children, className = "" }: {
+  title: string; icon: React.ElementType; iconColor: string;
+  action?: React.ReactNode; children: React.ReactNode; className?: string;
+}) {
+  return (
+    <div className={`rounded-2xl ${className}`} style={{ background: "var(--bg-surface)", border: "1px solid var(--border-clr)" }}>
+      <div className="flex items-center justify-between" style={{ padding: "18px 22px 10px" }}>
+        <div className="flex items-center gap-[10px]">
+          <Icon size={19} style={{ color: iconColor }} />
+          <h3 className="text-[16px] font-semibold m-0" style={{ color: "var(--text-primary)" }}>{title}</h3>
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="flex items-center gap-[6px] rounded-[9px] text-[12px] font-medium"
+      style={{ background: "var(--bg-input)", border: "1px solid var(--border-clr)", padding: "6px 11px", color: "var(--text-secondary)" }}
+    >
+      {children}<ChevronDown size={13} style={{ color: "var(--text-muted)" }} />
+    </div>
+  );
+}
+
+function ViewAll() {
+  return <span className="text-[13px] font-semibold flex items-center gap-[2px] cursor-pointer" style={{ color: C.cyan }}>View All <ArrowUpRight size={14} /></span>;
+}
+
+// ── dual-line chart (heart rate) ─────────────────────────────────
+function DualLineChart({ labels, avg, max }: { labels: string[]; avg: number[]; max: number[] }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 560, H = 230, padL = 34, padR = 16, padT = 16, padB = 28;
+  const cW = W - padL - padR, cH = H - padT - padB;
+  const allVals = [...avg, ...max].filter((v) => v > 0);
+  const yMax = Math.max(10, Math.ceil(Math.max(...allVals, 10) / 30) * 30);
+  const n = labels.length;
+  const xx = (i: number) => padL + (n <= 1 ? cW / 2 : (i / (n - 1)) * cW);
+  const yy = (v: number) => padT + cH - (v / yMax) * cH;
+  const line = (arr: number[]) => arr.map((v, i) => `${i ? "L" : "M"}${xx(i).toFixed(1)},${yy(v).toFixed(1)}`).join(" ");
+  const area = (arr: number[]) => `${line(arr)} L${xx(n - 1)},${padT + cH} L${xx(0)},${padT + cH} Z`;
+
+  return (
+    <div style={{ padding: "4px 18px 16px" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 250 }} onMouseLeave={() => setHover(null)}>
+        <defs>
+          <linearGradient id="hrAvg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={C.cyan} stopOpacity="0.30" />
+            <stop offset="100%" stopColor={C.cyan} stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="hrLine" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={C.cyan} /><stop offset="100%" stopColor={C.purple} />
+          </linearGradient>
+        </defs>
+        {Array.from({ length: 4 }, (_, i) => {
+          const v = (yMax / 3) * i, y = yy(v);
+          return (
+            <g key={i}>
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="var(--border-clr)" strokeWidth="0.8" opacity={0.5} />
+              <text x={padL - 7} y={y + 3.5} textAnchor="end" fontSize="10" fill="var(--text-muted)">{Math.round(v)}</text>
+            </g>
+          );
+        })}
+        <path d={area(avg)} fill="url(#hrAvg)" />
+        <path d={line(max)} fill="none" stroke={C.purple} strokeWidth="2" strokeDasharray="5 4" opacity={0.85} strokeLinecap="round" />
+        <path d={line(avg)} fill="none" stroke="url(#hrLine)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        {hover !== null && (
+          <g>
+            <line x1={xx(hover)} y1={padT} x2={xx(hover)} y2={padT + cH} stroke={C.cyan} strokeWidth="1" opacity={0.3} />
+            <circle cx={xx(hover)} cy={yy(avg[hover])} r="4.5" fill={C.cyan} stroke="#fff" strokeWidth="2" />
+            <circle cx={xx(hover)} cy={yy(max[hover])} r="4" fill={C.purple} stroke="#fff" strokeWidth="2" />
+            {(() => {
+              const tw = 96, th = 46; let tx = xx(hover) - tw / 2;
+              tx = Math.max(padL, Math.min(tx, W - padR - tw));
+              const ty = Math.max(2, yy(Math.max(avg[hover], max[hover])) - th - 10);
+              return (
+                <g>
+                  <rect x={tx} y={ty} width={tw} height={th} rx="8" fill="var(--bg-elevated)" stroke="var(--border-clr)" />
+                  <text x={tx + 10} y={ty + 16} fontSize="10" fill="var(--text-muted)">{labels[hover]}</text>
+                  <text x={tx + 10} y={ty + 31} fontSize="12" fontWeight="700" fill={C.cyan}>{max[hover]} bpm max</text>
+                  <text x={tx + 10} y={ty + 42} fontSize="10" fill="var(--text-secondary)">{avg[hover]} bpm avg</text>
+                </g>
+              );
+            })()}
+          </g>
+        )}
+        {labels.map((l, i) => (
+          <g key={i}>
+            <rect x={xx(i) - cW / Math.max(n, 1) / 2} y={padT} width={cW / Math.max(n, 1)} height={cH} fill="transparent" onMouseEnter={() => setHover(i)} />
+            {(n <= 8 || i % 2 === 0) && <text x={xx(i)} y={H - 8} textAnchor="middle" fontSize="9.5" fill="var(--text-muted)">{l}</text>}
+          </g>
+        ))}
+      </svg>
+      <div className="flex items-center gap-5 justify-center mt-1">
+        <span className="flex items-center gap-[6px] text-[12px]" style={{ color: "var(--text-secondary)" }}><span style={{ width: 11, height: 3, borderRadius: 2, background: C.cyan }} />Avg Heart Rate</span>
+        <span className="flex items-center gap-[6px] text-[12px]" style={{ color: "var(--text-secondary)" }}><span style={{ width: 11, height: 3, borderRadius: 2, background: C.purple }} />Max Heart Rate</span>
+      </div>
+    </div>
+  );
+}
+
+// ── donut ────────────────────────────────────────────────────────
+function Donut({ segments, centerValue, centerLabel }: {
+  segments: { label: string; value: number; color: string }[]; centerValue: string; centerLabel: string;
+}) {
+  const total = segments.reduce((a, s) => a + s.value, 0) || 1;
+  const R = 70, r = 46, cx = 90, cy = 90;
+  let acc = -90;
+  const arc = (val: number) => {
+    const frac = val / total, a0 = acc, a1 = acc + frac * 360; acc = a1;
+    const p = (ang: number, rad: number) => [cx + rad * Math.cos((ang * Math.PI) / 180), cy + rad * Math.sin((ang * Math.PI) / 180)];
+    const [x0, y0] = p(a0, R), [x1, y1] = p(a1, R), [x2, y2] = p(a1, r), [x3, y3] = p(a0, r);
+    const large = a1 - a0 > 180 ? 1 : 0;
+    return `M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${r},${r} 0 ${large} 0 ${x3},${y3} Z`;
+  };
+  return (
+    <div className="flex items-center gap-5" style={{ padding: "6px 22px 20px" }}>
+      <svg width="180" height="180" viewBox="0 0 180 180" className="shrink-0">
+        {segments.map((s, i) => <path key={i} d={arc(s.value)} fill={s.color} />)}
+        <text x="90" y="86" textAnchor="middle" fontSize="26" fontWeight="700" fill="var(--text-primary)">{centerValue}</text>
+        <text x="90" y="104" textAnchor="middle" fontSize="11" fill="var(--text-muted)">{centerLabel}</text>
+      </svg>
+      <div className="flex-1 flex flex-col gap-[10px]">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center justify-between text-[13px]">
+            <span className="flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color }} />{s.label}
+            </span>
+            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{Math.round((s.value / total) * 100)}%</span>
           </div>
         ))}
       </div>
@@ -286,21 +251,147 @@ function ChartCard({
   );
 }
 
-// ── Dashboard ────────────────────────────────────────────────────
+// ── grouped bar chart (user growth) ──────────────────────────────
+function GroupedBars({ labels, a, b, aColor, bColor }: {
+  labels: string[]; a: number[]; b: number[]; aColor: string; bColor: string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = Math.max(1, ...a, ...b);
+  const steps = 3;
+  return (
+    <div style={{ padding: "6px 22px 18px" }}>
+      <div className="flex" style={{ height: 210 }}>
+        <div className="flex flex-col justify-between pr-2 text-right" style={{ width: 34 }}>
+          {Array.from({ length: steps + 1 }, (_, i) => (
+            <span key={i} className="text-[10px]" style={{ color: "var(--text-muted)" }}>{Math.round((max / steps) * (steps - i))}</span>
+          ))}
+        </div>
+        <div className="flex-1 flex items-end justify-between gap-2 relative" style={{ borderLeft: "1px solid var(--border-clr)", borderBottom: "1px solid var(--border-clr)" }}>
+          {labels.map((l, i) => (
+            <div key={i} className="flex-1 flex items-end justify-center gap-[3px] h-full relative" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <div style={{ width: "32%", maxWidth: 14, height: `${(a[i] / max) * 100}%`, background: aColor, borderRadius: "3px 3px 0 0", minHeight: a[i] ? 3 : 0 }} />
+              <div style={{ width: "32%", maxWidth: 14, height: `${(b[i] / max) * 100}%`, background: bColor, borderRadius: "3px 3px 0 0", minHeight: b[i] ? 3 : 0 }} />
+              {hover === i && (
+                <div className="absolute z-10 rounded-[8px] px-2 py-1 text-[11px] whitespace-nowrap"
+                  style={{ bottom: "calc(100% + 4px)", left: "50%", transform: "translateX(-50%)", background: "var(--bg-elevated)", border: "1px solid var(--border-clr)", color: "var(--text-primary)" }}>
+                  <div style={{ color: aColor }}>{a[i]} new users</div>
+                  <div style={{ color: bColor }}>{b[i]} sessions</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex" style={{ paddingLeft: 34 }}>
+        <div className="flex-1 flex justify-between gap-2">
+          {labels.map((l, i) => <span key={i} className="flex-1 text-center text-[10px]" style={{ color: "var(--text-muted)" }}>{l}</span>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── status badge (online/offline/source) ─────────────────────────
+function Badge({ text, color }: { text: string; color: string }) {
+  return (
+    <span className="inline-flex items-center gap-[5px] rounded-full text-[11px] font-semibold capitalize"
+      style={{ padding: "3px 10px", background: `${color}1f`, color }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />{text}
+    </span>
+  );
+}
+
+// normalise dataSource: an ended "live" session is really stored
+function sourceOf(s: Session): "live" | "stored" | "mixed" {
+  const ended = new Date(s.endTime).getTime() > new Date(s.startTime).getTime();
+  return ended && s.dataSource === "live" ? "stored" : s.dataSource;
+}
+const SRC_META: Record<string, { label: string; color: string }> = {
+  live: { label: "Live", color: C.green },
+  stored: { label: "Stored", color: C.purple },
+  mixed: { label: "Mixed", color: C.cyan },
+};
+
+// Real activity types (from session.activityType) → label, color, icon.
+const ACT_META: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+  running: { label: "Running", color: C.green, icon: Footprints },
+  walking: { label: "Walking", color: C.cyan, icon: Footprints },
+  cycling: { label: "Cycling", color: C.purple, icon: Bike },
+  training: { label: "Strength", color: C.amber, icon: Dumbbell },
+  hiking: { label: "Hiking", color: C.blue, icon: Mountain },
+  recovery_walk: { label: "Recovery Walk", color: C.green, icon: Footprints },
+  interval_run: { label: "Interval Run", color: C.pink, icon: Zap },
+  ecg: { label: "ECG", color: C.blue, icon: Activity },
+  other: { label: "Other", color: C.slate, icon: Circle },
+};
+const actMeta = (k: string) => ACT_META[k] ?? ACT_META.other;
+
+// ── page ─────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter();
   const { data, error, isLoading, mutate } = useDashboard();
+  const { data: sessData } = useSessions({ limit: 100, sort: "startTime", order: "desc" });
+  const { data: devData } = useDevices({ limit: 100, sort: "lastSeen", order: "desc" });
+
+  const d = data as Record<string, unknown> | undefined;
+  const sessions = (sessData?.items as unknown as Session[]) ?? [];
+  const devices = (devData?.items as unknown as Device[]) ?? [];
+
+  const derived = useMemo(() => {
+    const charts = (d?.charts as { labels?: string[]; usersMonthly?: number[]; sessionsMonthly?: number[] }) ?? {};
+    const labels = charts.labels?.length ? charts.labels : ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const usersMonthly = charts.usersMonthly?.length ? charts.usersMonthly : new Array(12).fill(0);
+    const sessionsMonthly = charts.sessionsMonthly?.length ? charts.sessionsMonthly : new Array(12).fill(0);
+
+    const withHR = sessions.filter((s) => s.avgHR > 0);
+    const avgHR = withHR.length ? Math.round(withHR.reduce((a, s) => a + s.avgHR, 0) / withHR.length) : 0;
+    // real HR trend: recent half vs older half of HR-bearing sessions (newest first)
+    const half = Math.floor(withHR.length / 2);
+    const recentMean = half ? withHR.slice(0, half).reduce((a, s) => a + s.avgHR, 0) / half : avgHR;
+    const olderMean = half ? withHR.slice(half, half * 2).reduce((a, s) => a + s.avgHR, 0) / half : avgHR;
+    const hrTrend = olderMean ? Math.round(((recentMean - olderMean) / olderMean) * 100) : 0;
+
+    // HR overview: oldest→newest of last 18 HR sessions
+    const hrSessions = [...withHR].slice(0, 18).reverse();
+    const hrLabels = hrSessions.map((s) => new Date(s.startTime).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }));
+    const hrAvg = hrSessions.map((s) => s.avgHR);
+    const hrMax = hrSessions.map((s) => s.maxHR || s.avgHR);
+    const hrSpark = withHR.slice(0, 14).reverse().map((s) => s.avgHR);
+
+    // source distribution
+    const counts: Record<string, number> = { live: 0, stored: 0, mixed: 0 };
+    sessions.forEach((s) => { counts[sourceOf(s)]++; });
+    const srcSegments = (["live", "stored", "mixed"] as const)
+      .map((k) => ({ label: SRC_META[k].label, value: counts[k], color: SRC_META[k].color }))
+      .filter((s) => s.value > 0);
+
+    // real activity distribution (from session.activityType)
+    const actCounts: Record<string, number> = {};
+    sessions.forEach((s) => { const k = s.activityType || "ecg"; actCounts[k] = (actCounts[k] || 0) + 1; });
+    const actTotal = sessions.length || 1;
+    const activitySegments = Object.entries(actCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, value]) => ({ key, value, pct: Math.round((value / actTotal) * 100) }));
+
+    // device online/offline
+    const onlineDevices = devices.filter((dv) => (Date.now() - new Date(dv.lastSeen).getTime()) / 3600000 < 24).length;
+
+    return {
+      labels, usersMonthly, sessionsMonthly, avgHR, hrTrend,
+      hrLabels, hrAvg, hrMax, hrSpark, srcSegments, activitySegments, counts,
+      onlineDevices, offlineDevices: devices.length - onlineDevices,
+    };
+  }, [d, sessions, devices]);
 
   if (isLoading) {
     return (
       <div>
-        <div className="flex items-center justify-between mb-7">
-          <div><h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Dashboard</h1></div>
+        <div className="h-8 w-48 rounded-lg animate-pulse mb-6" style={{ background: "var(--bg-surface)" }} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+          {[1,2,3,4].map((i) => <div key={i} className="h-[160px] rounded-2xl animate-pulse" style={{ background: "var(--bg-surface)" }} />)}
         </div>
-        <div className="grid grid-cols-4 gap-[14px] mb-6">
-          {[1,2,3,4].map(i => <div key={i} className="h-[130px] rounded-2xl animate-pulse" style={{ background: "var(--bg-surface)" }} />)}
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          {[1,2].map(i => <div key={i} className="h-[340px] rounded-2xl animate-pulse" style={{ background: "var(--bg-surface)" }} />)}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          {[1,2,3].map((i) => <div key={i} className="h-[320px] rounded-2xl animate-pulse" style={{ background: "var(--bg-surface)" }} />)}
         </div>
       </div>
     );
@@ -309,49 +400,187 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="text-center py-20">
-        <AlertCircle size={48} className="mx-auto mb-4" style={{ color: "#EF4444" }} />
+        <AlertCircle size={48} className="mx-auto mb-4" style={{ color: C.pink }} />
         <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>Failed to load dashboard data</p>
         <Btn onClick={() => mutate()} variant="ghost"><RefreshCw size={14} />Retry</Btn>
       </div>
     );
   }
 
-  const d = data as Record<string, unknown> | undefined;
   const totalUsers = (d?.totalUsers as number) ?? 0;
   const totalSessions = (d?.totalSessions as number) ?? 0;
   const activeDevices = (d?.activeDevices as number) ?? 0;
-  const activeLicenses = (d?.activeLicenses as number) ?? 0;
+  const totalDevices = (d?.totalDevices as number) ?? 0;
   const trends = (d?.trends as Record<string, number>) ?? {};
-
-  // Real monthly series from the backend (last 12 months). Falls back to zeros.
-  const charts = (d?.charts as { labels?: string[]; usersMonthly?: number[]; sessionsMonthly?: number[] }) ?? {};
-  const months = charts.labels?.length ? charts.labels : FALLBACK_MONTHS;
-  const regData = charts.usersMonthly?.length ? charts.usersMonthly : new Array(12).fill(0);
-  const sessData = charts.sessionsMonthly?.length ? charts.sessionsMonthly : new Array(12).fill(0);
+  const recentSessions = sessions.slice(0, 5);
+  const recentDevices = devices.slice(0, 5);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-7">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold m-0" style={{ color: "var(--text-primary)" }}>Dashboard</h1>
-          <p className="text-[13px] mt-1" style={{ color: "var(--text-muted)" }}>Platform overview and system health</p>
+          <h1 className="text-[28px] font-bold m-0" style={{ color: "var(--text-primary)" }}>Dashboard</h1>
+          <p className="text-[14px] mt-1" style={{ color: "var(--text-muted)" }}>Overview of your wearable wellness platform</p>
         </div>
-        <div className="flex items-center gap-2 px-[14px] py-[6px] rounded-full text-[13px] font-semibold" style={{ background: "rgba(16,185,129,0.12)", color: "#10B981" }}>
-          <CheckCircle2 size={14} />All Systems Operational
-        </div>
+        <button
+          onClick={() => downloadExport("sessions")}
+          className="flex items-center gap-2 rounded-[12px] text-[14px] font-semibold text-white cursor-pointer border-none"
+          style={{ padding: "11px 18px", background: "linear-gradient(135deg, #22D3EE, #3B82F6)", boxShadow: "0 10px 24px rgba(59,130,246,0.30)" }}
+        >
+          <Download size={16} />Export Report
+        </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-[14px] mb-6">
-        <MetricCard icon={Users} label="Total Users" value={totalUsers} sub="vs last month" trend={trends.usersTrend ?? 0} color="#06B6D4" />
-        <MetricCard icon={FileText} label="Sessions" value={totalSessions} sub="vs last month" trend={trends.sessionsTrend ?? 0} color="#10B981" />
-        <MetricCard icon={Radio} label="Active Devices" value={activeDevices} color="#8B5CF6" />
-        <MetricCard icon={ShieldCheck} label="Active Licenses" value={activeLicenses} color="#F59E0B" />
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
+        <StatCard icon={Users} label="Total Users" value={totalUsers.toLocaleString()} color={C.blue}
+          trend={trends.usersTrend ?? 0} trendLabel="vs last week" spark={{ type: "bar", data: derived.usersMonthly }} />
+        <StatCard icon={Smartphone} label="Active Devices" value={activeDevices.toLocaleString()} color={C.purple}
+          trend={null} trendLabel={`of ${totalDevices} total`} spark={{ type: "bar", data: devices.slice(0, 12).map((x) => x.batteryLevel) }} />
+        <StatCard icon={Activity} label="Total Sessions" value={totalSessions.toLocaleString()} color={C.cyan}
+          trend={trends.sessionsTrend ?? 0} trendLabel="vs last week" spark={{ type: "bar", data: derived.sessionsMonthly }} />
+      </div>
+      <div className="flex items-center gap-[6px] mb-5 text-[12px] -mt-1" style={{ color: "var(--text-muted)" }}>
+        <Server size={13} style={{ color: C.green }} />
+        {activeDevices}/{totalDevices} devices online · {derived.onlineDevices} seen in last 24h
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <ChartCard data={regData} labels={months} color="#06B6D4" title="User Registrations" icon={TrendingUp} />
-        <ChartCard data={sessData} labels={months} color="#10B981" title="Sessions Recorded" icon={FileText} />
+      {/* Row 3 — tables */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
+        <Card title="Recent Sessions" icon={Clock} iconColor={C.cyan} action={<span onClick={() => router.push("/sessions")}><ViewAll /></span>}>
+          <div className="overflow-x-auto" style={{ padding: "4px 10px 14px" }}>
+            <table className="w-full" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr className="text-[11px] uppercase" style={{ color: "var(--text-muted)", letterSpacing: 0.4 }}>
+                  <th className="text-left font-semibold px-3 py-2">User</th>
+                  <th className="text-left font-semibold px-3 py-2">Source</th>
+                  <th className="text-left font-semibold px-3 py-2">Duration</th>
+                  <th className="text-left font-semibold px-3 py-2">Heart Rate</th>
+                  <th className="text-left font-semibold px-3 py-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentSessions.map((s) => {
+                  const src = sourceOf(s); const meta = SRC_META[src];
+                  return (
+                    <tr key={s.id} className="cursor-pointer" onClick={() => router.push(`/sessions/${s.id}`)}
+                      style={{ borderTop: "1px solid var(--border-clr)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                      <td className="px-3 py-[10px]">
+                        <div className="flex items-center gap-[10px]">
+                          <span className="flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                            style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#22D3EE,#8B5CF6)" }}>
+                            {getInitials(s.userName || "–")}
+                          </span>
+                          <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{s.userName || "Unknown"}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-[10px]"><Badge text={meta.label} color={meta.color} /></td>
+                      <td className="px-3 py-[10px] text-[13px]" style={{ color: "var(--text-secondary)" }}>{formatDuration(s.startTime, s.endTime)}</td>
+                      <td className="px-3 py-[10px]">
+                        <span className="inline-flex items-center gap-1 text-[13px] font-semibold" style={{ color: C.pink }}>
+                          <Heart size={12} />{s.avgHR || "–"} bpm
+                        </span>
+                      </td>
+                      <td className="px-3 py-[10px] text-[12px]" style={{ color: "var(--text-muted)" }}>
+                        {new Date(s.startTime).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!recentSessions.length && <tr><td colSpan={5}><Empty text="No sessions yet" /></td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card title="Device Status" icon={Server} iconColor={C.purple} action={<span onClick={() => router.push("/devices")}><ViewAll /></span>}>
+          <div className="overflow-x-auto" style={{ padding: "4px 10px 14px" }}>
+            <table className="w-full" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr className="text-[11px] uppercase" style={{ color: "var(--text-muted)", letterSpacing: 0.4 }}>
+                  <th className="text-left font-semibold px-3 py-2">Device ID</th>
+                  <th className="text-left font-semibold px-3 py-2">User</th>
+                  <th className="text-left font-semibold px-3 py-2">Battery</th>
+                  <th className="text-left font-semibold px-3 py-2">Status</th>
+                  <th className="text-left font-semibold px-3 py-2">Last Seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentDevices.map((dv) => {
+                  const online = (Date.now() - new Date(dv.lastSeen).getTime()) / 3600000 < 24;
+                  const b = dv.batteryLevel;
+                  const bcolor = b > 50 ? C.green : b > 20 ? C.amber : C.pink;
+                  return (
+                    <tr key={dv.id} className="cursor-pointer" onClick={() => router.push(`/devices/${dv.id}`)}
+                      style={{ borderTop: "1px solid var(--border-clr)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hover-bg)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                      <td className="px-3 py-[10px] text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>{dv.id}</td>
+                      <td className="px-3 py-[10px] text-[13px]" style={{ color: "var(--text-secondary)" }}>{dv.userName}</td>
+                      <td className="px-3 py-[10px]">
+                        <div className="flex items-center gap-2">
+                          <div className="overflow-hidden rounded-[3px]" style={{ width: 42, height: 6, background: "var(--bg-input)" }}>
+                            <div className="h-full rounded-[3px]" style={{ width: `${b}%`, background: bcolor }} />
+                          </div>
+                          <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>{b}%</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-[10px]"><Badge text={online ? "Online" : "Offline"} color={online ? C.green : C.slate} /></td>
+                      <td className="px-3 py-[10px] text-[12px]" style={{ color: "var(--text-muted)" }}>{formatRelativeTime(dv.lastSeen)}</td>
+                    </tr>
+                  );
+                })}
+                {!recentDevices.length && <tr><td colSpan={5}><Empty text="No devices yet" /></td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       </div>
+
+      {/* Row 4 */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card title="User Growth" icon={BarChart3} iconColor={C.blue} action={
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-[6px] text-[12px]" style={{ color: "var(--text-secondary)" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: C.blue }} />New Users</span>
+            <span className="flex items-center gap-[6px] text-[12px]" style={{ color: "var(--text-secondary)" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: C.purple }} />Sessions</span>
+          </div>
+        }>
+          <GroupedBars labels={derived.labels} a={derived.usersMonthly} b={derived.sessionsMonthly} aColor={C.blue} bColor={C.purple} />
+        </Card>
+
+        <Card title="Sessions by Activity" icon={Activity} iconColor={C.green} action={<span onClick={() => router.push("/sessions")}><ViewAll /></span>}>
+          <div className="flex flex-col gap-[14px]" style={{ padding: "12px 22px 22px" }}>
+            {derived.activitySegments.length ? derived.activitySegments.map((s) => {
+              const m = actMeta(s.key);
+              return (
+                <div key={s.key} className="flex items-center gap-3">
+                  <span className="flex items-center justify-center shrink-0" style={{ width: 30, height: 30, borderRadius: "50%", background: `${m.color}22` }}>
+                    <m.icon size={15} style={{ color: m.color }} />
+                  </span>
+                  <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)", width: 74 }}>{m.label}</span>
+                  <div className="flex-1 overflow-hidden rounded-full" style={{ height: 8, background: "var(--bg-input)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${Math.max(s.pct, 2)}%`, background: m.color }} />
+                  </div>
+                  <span className="text-[13px] font-semibold text-right" style={{ color: "var(--text-primary)", width: 36 }}>{s.pct}%</span>
+                  <span className="text-[13px] text-right" style={{ color: "var(--text-muted)", width: 48 }}>{s.value.toLocaleString()}</span>
+                </div>
+              );
+            }) : <Empty text="No sessions recorded yet" />}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center" style={{ padding: "48px 20px", color: "var(--text-muted)" }}>
+      <Activity size={28} className="mb-2 opacity-60" />
+      <p className="text-[13px] m-0">{text}</p>
     </div>
   );
 }
