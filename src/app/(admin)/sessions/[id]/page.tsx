@@ -2,21 +2,43 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Clock, Heart, Activity, Thermometer, Wifi, Plus, Minus, Play, Pause, Download, Info, AlertCircle, RefreshCw, Droplets, Waves } from "lucide-react";
+import { Clock, Heart, Activity, Thermometer, Wifi, Play, Pause, Download, Info, AlertCircle, RefreshCw, Droplets, Waves } from "lucide-react";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import EcgMonitorChart, {
   chartSpeedLabel,
   sampleRateLabel,
-  NOMINAL_GAIN_LABEL,
   type EcgQuality,
   type EcgPqrst,
 } from "@/components/ui/EcgMonitorChart";
-import EcgSweepChart from "@/components/ui/EcgSweepChart";
 import MiniChart from "@/components/ui/MiniChart";
 import Btn from "@/components/ui/Btn";
 import { useSessionDetail } from "@/lib/hooks";
 import { downloadExport } from "@/lib/api";
 import { formatTime, formatDuration } from "@/lib/utils";
+
+/**
+ * Replay constants, taken from the app's own previous-session screen
+ * (_ReplayEcgArea in features/sessions/screens/session_detail_screen.dart) so
+ * the admin replays a recording exactly the way the phone does.
+ */
+const REPLAY_TICK_MS = 40;
+const REPLAY_WINDOW_SEC = 6;
+const FALLBACK_PACE_HZ = 130;
+
+/**
+ * The app charts a 1500-point downsample of the recording and reports the raw
+ * sample count separately. Matching that keeps the two traces the same SHAPE:
+ * drawing all 18k samples of a long recording instead would stack several
+ * samples on every pixel and render a visibly denser waveform.
+ */
+const CHART_MAX_POINTS = 1500;
+
+/** Stride-pick downsample — the app's own _downsample, unchanged. */
+function downsampleTo(src: number[], target: number): number[] {
+  if (src.length <= target) return src;
+  const step = src.length / target;
+  return Array.from({ length: target }, (_, i) => src[Math.floor(i * step)]);
+}
 
 /** Seconds -> "M:SS", for the playback timer. */
 function formatMMSS(totalSeconds: number): string {
@@ -32,7 +54,6 @@ export default function SessionDetailPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const { data, error, isLoading, mutate } = useSessionDetail(sessionId);
-  const [zoomLevel, setZoomLevel] = useState(1);
 
   const session = data as Record<string, unknown> | undefined;
 
@@ -50,6 +71,7 @@ export default function SessionDetailPage() {
     const empty = {
       samples: [] as number[],
       full: [] as number[],
+      chartSamples: [] as number[],
       offsetsSec: [] as number[],
       sampleRateHz: null as number | null,
       leadOn: true,
@@ -117,12 +139,17 @@ export default function SessionDetailPage() {
           })
         : full.map((_, i) => i / fallbackRate);
 
+    // What the chart actually draws: the app's 1500-point downsample.
+    const chartSamples = downsampleTo(full, CHART_MAX_POINTS);
+
     // Preferred source for the static (non-playback) metadata: the backend's
     // ECG block, which carries the device's declared rate and contact flags.
+
     if (block && Array.isArray(block.samples) && block.samples.length > 0) {
       return {
         samples: block.samples.map((v) => -v),
         full,
+        chartSamples,
         offsetsSec,
         sampleRateHz: block.sampleRateHz ?? null,
         leadOn: block.leadOn ?? true,
@@ -138,7 +165,7 @@ export default function SessionDetailPage() {
     // are real, but no rate was stored - so sampleRateHz stays null and the
     // chart declines to claim a calibrated sample-rate label (playback itself
     // still works, since it is now paced by real timestamps, not by rate).
-    return { ...empty, samples: full, full, offsetsSec, totalSamples: full.length };
+    return { ...empty, samples: full, full, chartSamples, offsetsSec, totalSamples: full.length };
   }, [session]);
 
   // The recording's real elapsed duration, from its own start/end timestamps -
@@ -161,64 +188,116 @@ export default function SessionDetailPage() {
   const effectiveDurationSec = Math.max(sessionDurationSec, lastSampleOffsetSec, 0.001);
 
   /**
-   * Playback of the stored waveform: starts automatically when the session
-   * opens, advances at real wall-clock speed against the recording's real
-   * duration, loops rather than stopping at the end (a monitor display keeps
-   * moving), and can be paused/resumed.
+   * Replay of the stored waveform, ported from the app's previous-session
+   * screen so the admin shows a recording the way the phone does.
+   *
+   * The app does not scroll a TIME window across the samples. It reveals the
+   * recording one sample at a time - `revealCount` - and hands the chart a
+   * FIXED-LENGTH slice ending at that point, which is what makes the trace
+   * enter at the right edge and slide left at a constant rate. The reveal rate
+   * is samples/duration, so a replay always finishes in exactly the
+   * recording's own wall-clock duration whatever the sample density is.
    */
-  const canPlay = totalSamples > 1 && effectiveDurationSec > 0;
+  const chartSamples = ecg.chartSamples;
+  const totalChartSamples = chartSamples.length;
+  const canPlay = totalChartSamples > 1 && effectiveDurationSec > 0;
+
+  // Samples revealed per second: the whole recording, spread over its own
+  // real duration.
+  const paceCountPerSecond =
+    effectiveDurationSec > 0 ? totalChartSamples / effectiveDurationSec : FALLBACK_PACE_HZ;
 
   const [playing, setPlaying] = useState(true);
-  const [elapsedSec, setElapsedSec] = useState(0);
-  const lastFrameRef = useRef<number | null>(null);
+  const [revealCount, setRevealCount] = useState(0);
+  /** When the current play run started, and the reveal count it started from. */
+  const playRunRef = useRef<{ at: number; from: number } | null>(null);
 
-  // A different session was opened: start its playback from the beginning.
+  // A new session - or this session's samples arriving - restarts the replay
+  // from the beginning and auto-plays, as the app's didUpdateWidget does.
   useEffect(() => {
-    setElapsedSec(0);
+    setRevealCount(0);
     setPlaying(true);
-    lastFrameRef.current = null;
-  }, [sessionId]);
+    playRunRef.current = { at: performance.now(), from: 0 };
+  }, [sessionId, totalChartSamples]);
 
   useEffect(() => {
     if (!playing || !canPlay) return;
-    let raf = 0;
-    const tick = (now: number) => {
-      if (lastFrameRef.current === null) lastFrameRef.current = now;
-      const deltaSec = (now - lastFrameRef.current) / 1000;
-      // Throttled to ~15 updates/sec: a long recording does not need
-      // re-scanning on every display refresh to look like a smooth sweep.
-      // Capped at 250ms so a backgrounded tab resuming does not jump the
-      // trace forward by however long it was hidden.
-      if (deltaSec >= 0.066) {
-        lastFrameRef.current = now;
-        const cappedDeltaSec = Math.min(deltaSec, 0.25);
-        setElapsedSec((e) => Math.min(effectiveDurationSec, e + cappedDeltaSec));
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      lastFrameRef.current = null;
-    };
-  }, [playing, canPlay, effectiveDurationSec]);
+    if (!playRunRef.current) playRunRef.current = { at: performance.now(), from: 0 };
+    const id = window.setInterval(() => {
+      const run = playRunRef.current;
+      if (!run) return;
+      const elapsed = (performance.now() - run.at) / 1000;
+      const next = Math.max(
+        0,
+        Math.min(totalChartSamples, run.from + Math.round(elapsed * paceCountPerSecond))
+      );
+      setRevealCount(next);
+      // The end stops the replay rather than looping it; Play restarts it.
+      if (next >= totalChartSamples) setPlaying(false);
+    }, REPLAY_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [playing, canPlay, totalChartSamples, paceCountPerSecond]);
 
-  // Reaching the end freezes the display on the final frame rather than
-  // looping - Play then starts the recording over from the beginning.
-  const playbackDone = canPlay && elapsedSec >= effectiveDurationSec;
-  useEffect(() => {
-    if (playbackDone && playing) setPlaying(false);
-  }, [playbackDone, playing]);
+  const playbackDone = canPlay && revealCount >= totalChartSamples;
 
   const togglePlayback = () => {
     if (!canPlay) return;
-    if (playbackDone) setElapsedSec(0);
-    setPlaying((p) => !p);
+    if (playing) {
+      playRunRef.current = null;
+      setPlaying(false);
+      return;
+    }
+    const from = revealCount >= totalChartSamples ? 0 : revealCount;
+    setRevealCount(from);
+    playRunRef.current = { at: performance.now(), from };
+    setPlaying(true);
   };
 
-  // Width of the visible strip: how much of the recording is on screen at
-  // once as it scrolls.
-  const PLAYBACK_WINDOW_SEC = 6;
+  /** Scrubbing pauses and jumps, exactly like dragging the app's slider. */
+  const scrubTo = (count: number) => {
+    if (!canPlay) return;
+    playRunRef.current = null;
+    setPlaying(false);
+    setRevealCount(Math.max(0, Math.min(totalChartSamples, count)));
+  };
+
+  /**
+   * The fixed-length slice handed to the chart.
+   *
+   * Its width is REPLAY_WINDOW_SEC of the recording, in samples. Before that
+   * many samples have been revealed the slice is LEFT-PADDED with the first
+   * sample, so the window is always full and the trace starts at the right
+   * edge immediately rather than growing out of the left one.
+   */
+  const replayWindowSamples = (() => {
+    const total = totalChartSamples;
+    let target: number;
+    if (effectiveDurationSec <= 0) target = total < 400 ? total : 400;
+    else target = Math.round((total / effectiveDurationSec) * REPLAY_WINDOW_SEC);
+    if (target > total) target = total;
+    if (target < 2) target = total < 2 ? total : 2;
+    return target;
+  })();
+
+  const showingReplay =
+    canPlay && (playing || (revealCount > 0 && revealCount < totalChartSamples));
+
+  const visibleSamples = (() => {
+    if (!showingReplay) return chartSamples;
+    const end = Math.min(Math.max(revealCount, 2), totalChartSamples);
+    const windowSize = Math.min(Math.max(replayWindowSamples, 2), totalChartSamples);
+    if (end >= windowSize) return chartSamples.slice(end - windowSize, end);
+    return [
+      ...new Array<number>(windowSize - end).fill(chartSamples[0]),
+      ...chartSamples.slice(0, end),
+    ];
+  })();
+
+  /** Replay position in seconds, derived from the reveal count. */
+  const replayElapsedSec =
+    paceCountPerSecond > 0
+      ? (showingReplay ? revealCount : totalChartSamples) / paceCountPerSecond
+      : 0;
 
   /**
    * Heart rate, temperature, SpO2, PR interval and RR interval AT THE CURRENT
@@ -274,25 +353,30 @@ export default function SessionDetailPage() {
     return { hr, temp, spo2, pr, rr };
   }, [session]);
 
-  // The most recent reading AT OR BEFORE the current playhead time - located
-  // by binary search, since offsetsSec is non-decreasing.
-  const cursorIndex = (() => {
-    const offs = ecg.offsetsSec;
-    if (!offs.length) return 0;
-    let lo = 0;
-    let hi = offs.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (offs[mid] <= elapsedSec) lo = mid + 1;
-      else hi = mid;
-    }
-    return Math.max(0, Math.min(lo - 1, vitalsAtSample.hr.length - 1));
-  })();
-  const currentHr = vitalsAtSample.hr[cursorIndex] ?? 0;
-  const currentTemp = vitalsAtSample.temp[cursorIndex] ?? 0;
-  const currentSpo2 = vitalsAtSample.spo2[cursorIndex] ?? 0;
-  const currentPr = vitalsAtSample.pr[cursorIndex] ?? 0;
-  const currentRr = vitalsAtSample.rr[cursorIndex] ?? 0;
+  /**
+   * The replay position as a 0..1 fraction, or null when the replay is at rest
+   * (not started, or finished) - the app's own _replayFraction.
+   */
+  const replayFraction =
+    showingReplay && totalChartSamples > 0 ? revealCount / totalChartSamples : null;
+
+  /**
+   * A vital AT THE REPLAY POSITION - the app's _atReplayPosition. The fraction
+   * indexes straight into the forward-filled timeline, so the numbers track
+   * the trace. At rest the recording's last value stands in, which is what the
+   * cards show before playback starts and after it finishes.
+   */
+  const atReplayPosition = (timeline: number[]): number => {
+    if (!timeline.length) return 0;
+    const i = Math.round((replayFraction ?? 1) * (timeline.length - 1));
+    return timeline[Math.max(0, Math.min(timeline.length - 1, i))] ?? 0;
+  };
+
+  const currentHr = atReplayPosition(vitalsAtSample.hr);
+  const currentTemp = atReplayPosition(vitalsAtSample.temp);
+  const currentSpo2 = atReplayPosition(vitalsAtSample.spo2);
+  const currentPr = atReplayPosition(vitalsAtSample.pr);
+  const currentRr = atReplayPosition(vitalsAtSample.rr);
 
   // Real temperature series from stored readings only (downsampled for the chart).
   const tempData = useMemo(() => {
@@ -382,26 +466,10 @@ export default function SessionDetailPage() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <h3 className="text-base font-semibold m-0" style={{ color: "var(--text-primary)" }}>ECG Waveform</h3>
           <div className="flex items-center gap-4 flex-wrap">
-            {canPlay ? (
+            {canPlay && (
               <>
-                <div className="flex items-center gap-2">
-                  <Btn
-                    variant="ghost"
-                    style={{ padding: "6px 12px", fontSize: 12 }}
-                    onClick={togglePlayback}
-                  >
-                    {playing ? <Pause size={12} /> : <Play size={12} />}
-                    {playing ? "Pause" : playbackDone ? "Replay" : "Play"}
-                  </Btn>
-                  <span
-                    className="text-xs font-semibold tabular-nums"
-                    style={{ color: "var(--text-secondary)" }}
-                  >
-                    {formatMMSS(elapsedSec)} / {formatMMSS(effectiveDurationSec)}
-                  </span>
-                </div>
-                {/* Live readout at the playhead - like the numbers beside a
-                    bedside monitor's trace, updating as playback advances. */}
+                {/* Live readout at the replay position - like the numbers
+                    beside a bedside monitor's trace, tracking the trace. */}
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1 text-xs font-bold" style={{ color: "#F43F5E" }}>
                     <Heart size={12} />
@@ -425,36 +493,54 @@ export default function SessionDetailPage() {
                   </span>
                 </div>
               </>
-            ) : (
-              <div className="flex gap-2">
-                <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.max(0.25, z - 0.5))} disabled={zoomLevel <= 0.25}><Minus size={12} />Zoom Out</Btn>
-                <span className="flex items-center px-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{zoomLevel.toFixed(1)}x</span>
-                <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setZoomLevel(z => Math.min(4, z + 0.5))} disabled={zoomLevel >= 4}><Plus size={12} />Zoom In</Btn>
-              </div>
             )}
           </div>
         </div>
-        {canPlay ? (
-          <EcgSweepChart
-            samples={ecg.full}
-            offsetsSec={ecg.offsetsSec}
-            elapsedSec={elapsedSec}
-            windowSec={PLAYBACK_WINDOW_SEC}
-            sampleRateHz={ecg.sampleRateHz}
-            leadOn={ecg.leadOn}
-            quality={ecg.quality}
-            height={220}
-          />
-        ) : (
-          <EcgMonitorChart
-            samples={ecg.samples}
-            sampleRateHz={ecg.sampleRateHz}
-            pqrst={null}
-            leadOn={ecg.leadOn}
-            quality={ecg.quality}
-            height={220}
-            zoom={zoomLevel}
-          />
+        {/* The SAME chart the app draws with, fed the same way: a fixed-length
+            slice of the recording ending at the reveal point. PQRST markers
+            are off - the firmware's complex describes the newest beat only, so
+            it cannot be attributed to a slice from mid-recording, which is why
+            the app passes null here while replaying too. */}
+        <EcgMonitorChart
+          samples={visibleSamples}
+          sampleRateHz={ecg.sampleRateHz}
+          pqrst={null}
+          leadOn={ecg.leadOn}
+          quality={ecg.quality}
+          height={220}
+        />
+        {canPlay && (
+          <>
+            {/* Transport: play/pause plus a scrub bar over the whole
+                recording - the pair the app's replay screen carries. */}
+            <div className="flex items-center gap-3 mt-3">
+              <Btn
+                variant="ghost"
+                style={{ padding: "6px 12px", fontSize: 12 }}
+                onClick={togglePlayback}
+              >
+                {playing ? <Pause size={12} /> : <Play size={12} />}
+                {playing ? "Pause" : playbackDone ? "Replay" : "Play"}
+              </Btn>
+              <input
+                type="range"
+                min={0}
+                max={totalChartSamples}
+                value={showingReplay ? revealCount : totalChartSamples}
+                onChange={(e) => scrubTo(Number(e.target.value))}
+                aria-label="Scrub through the recording"
+                className="flex-1 cursor-pointer"
+                style={{ accentColor: "#2EE8A0", height: 4 }}
+              />
+            </div>
+            <div
+              className="flex justify-between mt-1 text-[11px] tabular-nums"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <span>{formatMMSS(replayElapsedSec)}</span>
+              <span>{formatMMSS(effectiveDurationSec)}</span>
+            </div>
+          </>
         )}
         {/* Scale metadata, worded as the app words it: the chart speed and
             the device's rate are only claimed when the device actually
@@ -469,11 +555,14 @@ export default function SessionDetailPage() {
           <span>Auto-scaled to the real signal (uncalibrated)</span>
           <span>
             {ecg.totalSamples.toLocaleString()} samples recorded
+            {totalChartSamples > 0 && totalChartSamples < ecg.totalSamples
+              ? ` · charted as a ${totalChartSamples.toLocaleString()}-point downsample`
+              : ""}
             {canPlay
               ? playbackDone
-                ? ` · playback complete (${PLAYBACK_WINDOW_SEC}s window)`
+                ? " · replay complete"
                 : playing
-                  ? ` · sweeping at real time (${PLAYBACK_WINDOW_SEC}s window)`
+                  ? ` · replaying at real time (${REPLAY_WINDOW_SEC}s window)`
                   : " · paused"
               : ""}
           </span>

@@ -8,7 +8,7 @@ import Btn from "@/components/ui/Btn";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  "https://ecg-api-7ryx.onrender.com/api";
+  "https://api.biotexindia.com";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
