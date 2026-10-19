@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, Radio, Activity, ShieldCheck, FileBarChart2,
+  Bell, LifeBuoy, TriangleAlert, CalendarClock,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -20,6 +21,10 @@ const NAV: NavItem[] = [
   { id: "sessions",  label: "Sessions",  icon: Activity,        href: "/sessions" },
   { id: "licenses",  label: "Licenses",  icon: ShieldCheck,     href: "/licenses" },
   { id: "reports",   label: "Reports",   icon: FileBarChart2,   href: "/reports" },
+  { id: "notifications", label: "Notifications", icon: Bell,    href: "/notifications" },
+  { id: "summary-emails", label: "Summary Emails", icon: CalendarClock, href: "/summary-emails" },
+  { id: "tickets",   label: "Support",   icon: LifeBuoy,        href: "/tickets" },
+  { id: "alerts",    label: "Alerts",    icon: TriangleAlert,   href: "/alerts" },
 ];
 
 const ACCENT_GRAD = "linear-gradient(135deg, #22D3EE 0%, #3B82F6 55%, #8B5CF6 100%)";

@@ -42,6 +42,48 @@ export function useDashboard(config?: SWRConfiguration) {
   });
 }
 
+// ─── Notifications ───
+export function useNotifications(
+  params: { page?: number; limit?: number; type?: string } = {},
+  config?: SWRConfiguration
+) {
+  const query = buildQuery({ page: params.page || 1, limit: params.limit || 50, ...params });
+  return useSWR<ListResponse<Record<string, unknown>>>(`/admin/notifications${query}`, swrFetcher, config);
+}
+
+// ─── Summary email schedules ───
+export function useSummarySchedules(config?: SWRConfiguration) {
+  return useSWR<ListResponse<Record<string, unknown>>>(
+    "/admin/summary-schedules",
+    swrFetcher,
+    { refreshInterval: 30000, ...config }
+  );
+}
+
+// ─── Support tickets ───
+export function useTickets(
+  params: { status?: string; priority?: string; category?: string; search?: string } = {},
+  config?: SWRConfiguration
+) {
+  const query = buildQuery({ limit: 100, ...params });
+  return useSWR<Record<string, unknown>>(`/admin/tickets${query}`, swrFetcher, {
+    refreshInterval: 15000,
+    ...config,
+  });
+}
+
+export function useTicket(id: string | null, config?: SWRConfiguration) {
+  return useSWR(id ? `/admin/tickets/${id}` : null, swrFetcher, {
+    refreshInterval: 6000,
+    ...config,
+  });
+}
+
+// ─── Alerts ───
+export function useAlerts(config?: SWRConfiguration) {
+  return useSWR("/admin/alerts", swrFetcher, { refreshInterval: 30000, ...config });
+}
+
 // ─── Users ───
 export function useUsers(
   params: { page?: number; limit?: number; search?: string; sort?: string; order?: string; status?: string } = {},
