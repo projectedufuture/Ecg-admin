@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, Radio, Activity, ShieldCheck, FileBarChart2,
-  Bell, LifeBuoy, TriangleAlert, CalendarClock,
+  Bell, LifeBuoy, TriangleAlert,
 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 
@@ -22,7 +22,9 @@ const NAV: NavItem[] = [
   { id: "licenses",  label: "Licenses",  icon: ShieldCheck,     href: "/licenses" },
   { id: "reports",   label: "Reports",   icon: FileBarChart2,   href: "/reports" },
   { id: "notifications", label: "Notifications", icon: Bell,    href: "/notifications" },
-  { id: "summary-emails", label: "Summary Emails", icon: CalendarClock, href: "/summary-emails" },
+  // Summary Emails page is hidden from the sidebar (logic/route still active).
+  // Re-add this entry to show it again:
+  // { id: "summary-emails", label: "Summary Emails", icon: CalendarClock, href: "/summary-emails" },
   { id: "tickets",   label: "Support",   icon: LifeBuoy,        href: "/tickets" },
   { id: "alerts",    label: "Alerts",    icon: TriangleAlert,   href: "/alerts" },
 ];
